@@ -1,0 +1,31 @@
+{
+  "name": "medikiosk",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx next dev",
+    "build": "npx next build",
+    "start": "npx next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@mistralai/mistralai": "^1.12.0",
+    "@neondatabase/serverless": "^1.0.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "next": "^15.1.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.7",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
