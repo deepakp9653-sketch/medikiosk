@@ -8,6 +8,7 @@ export interface FHIRValidationResult {
   resource_count: number;
   validator_version: string;
   issues: string[];
+  errors?: string[];
 }
 
 export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) {
@@ -58,7 +59,65 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
     }
   });
 
-  // 3. Condition Resource (Chief Complaint & History)
+  // 3. Composition Resource (Document Header)
+  entries.push({
+    fullUrl: `urn:uuid:composition-1`,
+    resource: {
+      resourceType: 'Composition',
+      id: 'composition-1',
+      status: 'final',
+      type: {
+        coding: [
+          {
+            system: 'http://loinc.org',
+            code: '11488-4',
+            display: 'Consultation note'
+          }
+        ]
+      },
+      subject: { reference: 'urn:uuid:patient-1' },
+      encounter: { reference: 'urn:uuid:encounter-1' },
+      date: timestamp,
+      author: [
+        {
+          display: `Clinician Dr. ${attestedRecord.attested_by_clinician_id || 'OPD-Physician'}`
+        }
+      ],
+      title: 'MediKiosk Outpatient Intake & Clinical Attestation',
+      section: [
+        {
+          title: 'Chief Complaint',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.chief_complaint || 'Not specified'}</div>`
+          }
+        },
+        {
+          title: 'History of Present Illness (HPI)',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.hpi || 'Not specified'}</div>`
+          }
+        },
+        {
+          title: 'Medications',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.medications || 'None recorded'}</div>`
+          }
+        },
+        {
+          title: 'Allergies',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.allergies || 'No known allergies reported'}</div>`
+          }
+        }
+      ]
+    }
+  });
+
+  // 4. Condition Resources (Diagnoses)
   if (content.chief_complaint) {
     entries.push({
       fullUrl: `urn:uuid:condition-1`,
@@ -74,14 +133,13 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
         code: {
           text: content.chief_complaint
         },
-        subject: { reference: 'urn:uuid:patient-1' },
-        encounter: { reference: 'urn:uuid:encounter-1' }
+        subject: { reference: 'urn:uuid:patient-1' }
       }
     });
   }
 
-  // 4. MedicationStatement Resource
-  if (content.medications) {
+  // 5. MedicationStatement Resources
+  if (content.medications && content.medications !== 'None recorded') {
     entries.push({
       fullUrl: `urn:uuid:medication-1`,
       resource: {
@@ -91,61 +149,29 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
         medicationCodeableConcept: {
           text: content.medications
         },
-        subject: { reference: 'urn:uuid:patient-1' }
+        subject: { reference: 'urn:uuid:patient-1' },
+        effectiveDateTime: timestamp
       }
     });
   }
 
-  // 5. Composition Resource (Main Clinical Header)
-  const composition = {
-    fullUrl: `urn:uuid:composition-1`,
-    resource: {
-      resourceType: 'Composition',
-      id: 'composition-1',
-      status: 'final',
-      type: {
-        coding: [{ system: 'http://loinc.org', code: '11506-3', display: 'Progress note' }],
-        text: 'MediKiosk Clinician-Attested Outpatient Intake Note'
-      },
-      subject: { reference: 'urn:uuid:patient-1' },
-      encounter: { reference: 'urn:uuid:encounter-1' },
-      date: timestamp,
-      author: [{ display: attestedRecord.clinician_id || 'Dr. Attending Clinician' }],
-      title: 'MediKiosk Clinical Consultation Record',
-      section: [
-        {
-          title: 'Chief Complaint',
-          text: { status: 'generated', div: `<div>${content.chief_complaint || 'N/A'}</div>` }
+  // 6. AllergyIntolerance Resources
+  if (content.allergies && content.allergies !== 'None reported' && content.allergies !== 'No known allergies reported') {
+    entries.push({
+      fullUrl: `urn:uuid:allergy-1`,
+      resource: {
+        resourceType: 'AllergyIntolerance',
+        id: 'allergy-1',
+        clinicalStatus: {
+          coding: [{ system: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical', code: 'active' }]
         },
-        {
-          title: 'History of Present Illness',
-          text: { status: 'generated', div: `<div>${content.hpi || 'N/A'}</div>` }
+        code: {
+          text: content.allergies
         },
-        {
-          title: 'Current Medications',
-          text: { status: 'generated', div: `<div>${content.medications || 'N/A'}</div>` }
-        }
-      ]
-    }
-  };
-
-  entries.unshift(composition);
-
-  // 6. Provenance Resource (Sign-Off Record)
-  entries.push({
-    fullUrl: `urn:uuid:provenance-1`,
-    resource: {
-      resourceType: 'Provenance',
-      id: 'provenance-1',
-      target: [{ reference: 'urn:uuid:composition-1' }],
-      recorded: timestamp,
-      agent: [
-        {
-          who: { display: attestedRecord.clinician_id || 'Attending Clinician' }
-        }
-      ]
-    }
-  });
+        patient: { reference: 'urn:uuid:patient-1' }
+      }
+    });
+  }
 
   const bundle = {
     resourceType: 'Bundle',
@@ -183,6 +209,9 @@ export function validateFHIRBundle(bundle: any): FHIRValidationResult {
     valid: issues.length === 0,
     resource_count: bundle.entry?.length || 0,
     validator_version: 'MediKiosk-FHIR-R4-v1.0 (NRCeS Aligned Sandbox)',
-    issues: issues
+    issues: issues,
+    errors: issues
   };
 }
+
+export const validateFHIRBundleSchema = validateFHIRBundle;

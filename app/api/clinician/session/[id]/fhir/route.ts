@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { buildSyntheticFHIRBundle, validateFHIRBundleSchema } from '@/lib/fhir';
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const resolvedParams = await Promise.resolve(params);
     const sessionId = resolvedParams.id;

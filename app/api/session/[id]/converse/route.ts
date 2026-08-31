@@ -3,7 +3,7 @@ import { query } from '@/lib/db';
 import { checkRedFlagRules } from '@/lib/redflag';
 import { generateConversationalFollowUp, generateBilingualSummary } from '@/lib/mistral';
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const resolvedParams = await Promise.resolve(params);
     const sessionId = resolvedParams.id;

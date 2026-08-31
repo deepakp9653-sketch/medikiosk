@@ -9,7 +9,7 @@ export const MISTRAL_MODELS = {
   VISION_OCR: 'pixtral-12b-2409',
 };
 
-export const SUPPORTED_LANGUAGES: Record<string, { name: string; native: string; bcp47: string; welcome: string; consent: string; complete: string }> = {
+export const SUPPORTED_LANGUAGES: Record<string, { name: string; native: string; bcp47: string; welcome: string; consent: string; complete: string; initial_q?: string }> = {
   hi: { 
     name: 'Hindi', 
     native: 'हिन्दी', 

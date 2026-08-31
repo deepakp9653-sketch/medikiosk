@@ -8,7 +8,7 @@ import {
   HelpCircle, FileText, XCircle, Globe, RefreshCw
 } from '@/components/Icons';
 
-export interface LanguagePack {
+interface LanguagePack {
   name: string;
   native: string;
   bcp47: string;
@@ -76,7 +76,7 @@ export interface LanguagePack {
   confirm_prompt: string;
 }
 
-export const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
+const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
   hi: {
     name: 'Hindi',
     native: 'हिन्दी',
