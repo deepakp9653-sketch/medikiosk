@@ -8,6 +8,23 @@ import {
   HelpCircle, FileText, XCircle, Globe, RefreshCw
 } from '@/components/Icons';
 
+// Helper function to safely convert any clinical value (string, object, array) into a string
+function formatClinicalText(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) {
+    return val.map(item => typeof item === 'object' ? formatClinicalText(item) : String(item)).filter(Boolean).join(', ');
+  }
+  if (typeof val === 'object') {
+    return Object.entries(val)
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'object' ? formatClinicalText(v) : v}`)
+      .filter(Boolean)
+      .join(' • ');
+  }
+  return String(val);
+}
+
 interface LanguagePack {
   name: string;
   native: string;
@@ -1258,20 +1275,21 @@ export default function KioskPortal() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {scannedFiles.map((f, idx) => {
                   const ext = f.data || {};
-                  const medCount = ext.medications?.length || 0;
-                  const labCount = ext.lab_values?.length || 0;
-                  const docType = ext.document_type || 'Prescription / Report';
-                  const docHospital = ext.doctor_or_hospital || 'Medical Document';
+                  const medCount = Array.isArray(ext.medications) ? ext.medications.length : 0;
+                  const labCount = Array.isArray(ext.lab_values) ? ext.lab_values.length : 0;
+                  const docType = typeof ext.document_type === 'string' ? ext.document_type.replace(/_/g, ' ') : 'Medical Document';
+                  const docHospital = formatClinicalText(ext.doctor_or_hospital);
+                  const fileName = typeof f.name === 'string' ? f.name : 'Uploaded Document';
 
                   return (
                     <div key={idx} className="bg-[#EAF3F2] border border-teal-800/20 rounded-2xl p-4 text-xs flex flex-col justify-between shadow-xs">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-[#2E7D4F] flex-shrink-0" />
-                          <span className="font-bold text-slate-900 text-sm truncate">{f.name}</span>
+                          <span className="font-bold text-slate-900 text-sm truncate">{fileName}</span>
                         </div>
                         <span className="bg-teal-800/10 text-[#2F5D62] px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase">
-                          {docType.replace('_', ' ')}
+                          {docType}
                         </span>
                       </div>
 

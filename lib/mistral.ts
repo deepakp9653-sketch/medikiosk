@@ -251,6 +251,21 @@ export async function extractDocumentEntitiesFromBase64(
 
     const content = response.choices?.[0]?.message?.content;
     const parsed = typeof content === 'string' ? JSON.parse(content) : JSON.parse(JSON.stringify(content));
+
+    if (parsed) {
+      // Flatten doctor_or_hospital if returned as nested object
+      if (typeof parsed.doctor_or_hospital === 'object' && parsed.doctor_or_hospital !== null) {
+        parsed.doctor_or_hospital = Object.entries(parsed.doctor_or_hospital)
+          .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+          .filter(Boolean)
+          .join(' • ');
+      }
+      // Flatten document_type if returned as object
+      if (typeof parsed.document_type === 'object' && parsed.document_type !== null) {
+        parsed.document_type = Object.values(parsed.document_type).join(' ');
+      }
+    }
+
     return parsed;
   } catch (err: any) {
     console.error('Mistral OCR Extraction error:', err);
