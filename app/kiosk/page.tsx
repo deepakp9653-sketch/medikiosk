@@ -630,11 +630,23 @@ export default function KioskPortal() {
   const [step, setStep] = useState<'language' | 'consent' | 'identify' | 'interview' | 'red_flag' | 'scan' | 'confirm'>('language');
   const [language, setLanguage] = useState<string>('hi');
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [queueId, setQueueId] = useState<string>('Q-104');
+  const [queueId, setQueueId] = useState<string>('Q-101');
   const [abhaId, setAbhaId] = useState<string>('');
   const [isGuardian, setIsGuardian] = useState<boolean>(false);
   
   const currentLang = LOCALIZED_LANGUAGES[language] || LOCALIZED_LANGUAGES.hi;
+
+  // Fetch continuous sequential queue token on load
+  useEffect(() => {
+    fetch('/api/session')
+      .then(res => res.json())
+      .then(data => {
+        if (data.next_token) {
+          setQueueId(data.next_token);
+        }
+      })
+      .catch(err => console.warn('Could not fetch next queue token:', err));
+  }, []);
 
   // Dynamic Interview State
   const [currentQuestion, setCurrentQuestion] = useState<any>({
@@ -1096,6 +1108,13 @@ export default function KioskPortal() {
 
           <button
             onClick={() => {
+              if (sessionId) {
+                fetch(`/api/session/${sessionId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ queue_id: queueId, abha_mock_id: abhaId || null })
+                }).catch(err => console.warn('Identity sync warning:', err));
+              }
               setStep('interview');
               speakPrompt(currentQuestion.question_localized || currentQuestion.question_en);
             }}

@@ -1,16 +1,71 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+/**
+ * GET /api/session
+ * Returns the continuous next sequential queue token (e.g., Q-101, Q-102, Q-105...)
+ */
+export async function GET() {
+  try {
+    const res = await query(`
+      SELECT queue_id FROM sessions 
+      WHERE queue_id ~ '^Q-[0-9]+$' 
+      ORDER BY CAST(SUBSTRING(queue_id FROM 3) AS INTEGER) DESC 
+      LIMIT 1
+    `);
+
+    let nextNum = 101;
+    if (res.rows.length > 0) {
+      const match = res.rows[0].queue_id.match(/^Q-(\d+)$/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      next_token: `Q-${nextNum}` 
+    });
+  } catch (err: any) {
+    console.error('Error calculating next queue token:', err);
+    return NextResponse.json({ success: true, next_token: 'Q-101' });
+  }
+}
+
+/**
+ * POST /api/session
+ * Initializes a new kiosk session with a continuous sequential queue token
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { language = 'hi', queue_id, abha_mock_id, patient_ref } = body;
 
+    let assignedQueueId = queue_id;
+
+    // If no queue_id was specified or left empty, compute next continuous token atomically
+    if (!assignedQueueId || assignedQueueId.trim() === '') {
+      const maxTokenRes = await query(`
+        SELECT queue_id FROM sessions 
+        WHERE queue_id ~ '^Q-[0-9]+$' 
+        ORDER BY CAST(SUBSTRING(queue_id FROM 3) AS INTEGER) DESC 
+        LIMIT 1
+      `);
+      let nextNum = 101;
+      if (maxTokenRes.rows.length > 0) {
+        const match = maxTokenRes.rows[0].queue_id.match(/^Q-(\d+)$/);
+        if (match) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      assignedQueueId = `Q-${nextNum}`;
+    }
+
     const res = await query(
       `INSERT INTO sessions (language, queue_id, abha_mock_id, patient_ref, status)
        VALUES ($1, $2, $3, $4, 'in_progress')
        RETURNING *`,
-      [language, queue_id || `Q-${Math.floor(100 + Math.random() * 900)}`, abha_mock_id || null, patient_ref || 'PATIENT_GUEST']
+      [language, assignedQueueId, abha_mock_id || null, patient_ref || 'PATIENT_GUEST']
     );
 
     const session = res.rows[0];
