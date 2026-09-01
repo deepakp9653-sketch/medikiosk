@@ -22,6 +22,15 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
 
   const entries: any[] = [];
 
+  // Normalize gender to valid FHIR code (male | female | other | unknown)
+  let fhirGender = 'other';
+  const rawGender = (sessionInfo?.gender || '').toLowerCase();
+  if (rawGender.includes('male') || rawGender.includes('पुरुष') || rawGender.includes('পুরুষ') || rawGender.includes('ஆண்') || rawGender.includes('పురుషుడు')) {
+    fhirGender = rawGender.includes('female') || rawGender.includes('महिला') || rawGender.includes('মহিলা') || rawGender.includes('பெண்') || rawGender.includes('స్త్రీ') ? 'female' : 'male';
+  } else if (rawGender.includes('female') || rawGender.includes('महिला') || rawGender.includes('स्त्री') || rawGender.includes('মহিলা') || rawGender.includes('பெண்') || rawGender.includes('స్త్రీ')) {
+    fhirGender = 'female';
+  }
+
   // 1. Patient Resource
   entries.push({
     fullUrl: `urn:uuid:patient-1`,
@@ -34,8 +43,14 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
           value: sessionInfo?.abha_mock_id || '91-1234-5678-9012'
         }
       ],
-      name: [{ text: sessionInfo?.patient_name || 'Anonymous Patient' }],
-      gender: 'other',
+      name: [{ text: sessionInfo?.patient_name || sessionInfo?.patient_ref || 'Anonymous Patient' }],
+      gender: fhirGender,
+      extension: sessionInfo?.age ? [
+        {
+          url: 'http://hl7.org/fhir/StructureDefinition/patient-age',
+          valueString: String(sessionInfo.age)
+        }
+      ] : undefined
     }
   });
 

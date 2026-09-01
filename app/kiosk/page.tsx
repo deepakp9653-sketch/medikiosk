@@ -648,6 +648,12 @@ export default function KioskPortal() {
       .catch(err => console.warn('Could not fetch next queue token:', err));
   }, []);
 
+  // Clinical Mode (Ministry of AYUSH vs Standard Allopathy)
+  const [clinicalMode, setClinicalMode] = useState<'allopathy' | 'ayurveda'>('allopathy');
+  const [showAyushModal, setShowAyushModal] = useState<boolean>(false);
+  const [ayushPasswordInput, setAyushPasswordInput] = useState<string>('');
+  const [ayushError, setAyushError] = useState<string | null>(null);
+
   // Dynamic Interview State
   const [currentQuestion, setCurrentQuestion] = useState<any>({
     id: 'q_chief_complaint',
@@ -690,11 +696,11 @@ export default function KioskPortal() {
     };
   }, []);
 
-  // Universal Native Voice Audio Synthesis for all 10 Indian Languages
+  // Universal Instant Native Voice Audio Synthesis (Zero-Latency Browser SpeechSynthesis First)
   const speakPrompt = (text: string, overrideLang?: string) => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !text) return;
 
-    // Stop previous audio
+    // Stop previous audio / speech
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
     }
@@ -712,22 +718,14 @@ export default function KioskPortal() {
     }
 
     const targetLang = overrideLang || language || 'hi';
-    const audioUrl = `/api/tts?lang=${encodeURIComponent(targetLang)}&text=${encodeURIComponent(text)}`;
-    const audio = new Audio(audioUrl);
-    currentAudioRef.current = audio;
+    const targetPack = LOCALIZED_LANGUAGES[targetLang] || LOCALIZED_LANGUAGES.hi;
 
-    audio.onended = () => {
-      isAISpeakingRef.current = false;
-      if (isMicActiveRef.current) {
-        startListeningLoop();
-      }
-    };
-
-    audio.onerror = () => {
-      // Fallback to window.speechSynthesis if network fails
-      if ('speechSynthesis' in window) {
+    // 1. Instant zero-latency native Web Speech Synthesis
+    if ('speechSynthesis' in window) {
+      try {
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = currentLang.bcp47;
+        utterance.lang = targetPack.bcp47;
+        utterance.rate = 0.95;
         utterance.onend = () => {
           isAISpeakingRef.current = false;
           if (isMicActiveRef.current) startListeningLoop();
@@ -737,10 +735,25 @@ export default function KioskPortal() {
           if (isMicActiveRef.current) startListeningLoop();
         };
         window.speechSynthesis.speak(utterance);
-      } else {
-        isAISpeakingRef.current = false;
-        if (isMicActiveRef.current) startListeningLoop();
+        return;
+      } catch (e) {
+        console.warn('SpeechSynthesis error, falling back:', e);
       }
+    }
+
+    // 2. Fallback Audio proxy
+    const audioUrl = `/api/tts?lang=${encodeURIComponent(targetLang)}&text=${encodeURIComponent(text)}`;
+    const audio = new Audio(audioUrl);
+    currentAudioRef.current = audio;
+
+    audio.onended = () => {
+      isAISpeakingRef.current = false;
+      if (isMicActiveRef.current) startListeningLoop();
+    };
+
+    audio.onerror = () => {
+      isAISpeakingRef.current = false;
+      if (isMicActiveRef.current) startListeningLoop();
     };
 
     audio.play().catch(err => {
@@ -834,21 +847,35 @@ export default function KioskPortal() {
     setLanguage(langCode);
     const targetPack = LOCALIZED_LANGUAGES[langCode] || LOCALIZED_LANGUAGES.hi;
     
-    // Set localized initial question & options
+    // Set localized initial question & options (tailored if AYUSH mode)
+    const isAyurveda = clinicalMode === 'ayurveda';
+    const ayushInitialOptions = [
+      'वात दोष / Gas, dryness, joint pain (Vata)',
+      'पित्त दोष / Acidity, burning, fever (Pitta)',
+      'कफ दोष / Cough, congestion, lethargy (Kapha)',
+      'अग्निमांद्य / Indigestion & loss of appetite',
+      'अन्य स्वास्थ्य समस्या / Other symptom'
+    ];
+
     setCurrentQuestion({
       id: 'q_chief_complaint',
-      question_localized: targetPack.initial_q,
-      question_en: 'What primary symptom or health complaint brings you to the clinic today?',
-      section: 'chief_complaint',
+      question_localized: isAyurveda ? `${targetPack.initial_q} (आयुष मोड)` : targetPack.initial_q,
+      question_en: isAyurveda ? 'What primary Ayurvedic or general health symptom brings you here today?' : 'What primary symptom or health complaint brings you to the clinic today?',
+      section: isAyurveda ? 'ayush_chief_complaint' : 'chief_complaint',
       field_name: 'chief_complaint',
-      options: targetPack.initial_options
+      options: isAyurveda ? ayushInitialOptions : targetPack.initial_options
     });
 
     try {
       const res = await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language: langCode, queue_id: queueId, abha_mock_id: abhaId || null })
+        body: JSON.stringify({ 
+          language: langCode, 
+          queue_id: queueId, 
+          abha_mock_id: abhaId || null,
+          clinical_mode: clinicalMode
+        })
       });
       const data = await res.json();
       if (data.session) {
@@ -860,6 +887,24 @@ export default function KioskPortal() {
       console.error('Session start error:', err);
       setStep('consent');
     }
+  };
+
+  // AYUSH Mode Password Verification Handler (Password: Ayurveda)
+  const handleAyushPasswordSubmit = () => {
+    if (ayushPasswordInput.trim() === 'Ayurveda') {
+      setClinicalMode('ayurveda');
+      setShowAyushModal(false);
+      setAyushPasswordInput('');
+      setAyushError(null);
+      alert('🌿 Ministry of AYUSH (Ayurveda) Mode Activated successfully!');
+    } else {
+      setAyushError('Invalid password. Please enter the official AYUSH password: Ayurveda');
+    }
+  };
+
+  const handleDisableAyushMode = () => {
+    setClinicalMode('allopathy');
+    alert('Switched back to Standard Allopathic Mode.');
   };
 
   // Record Consent
@@ -965,18 +1010,43 @@ export default function KioskPortal() {
   return (
     <div className="min-h-screen bg-[#F8FAF9] flex flex-col justify-between p-4 md:p-6 max-w-5xl mx-auto">
       {/* Kiosk Header */}
-      <header className="flex items-center justify-between py-3 border-b border-teal-900/10 mb-6 bg-white rounded-2xl p-4 shadow-sm">
+      <header className="flex flex-wrap items-center justify-between py-3 border-b border-teal-900/10 mb-6 bg-white rounded-2xl p-4 shadow-sm gap-3">
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#2F5D62] text-white flex items-center justify-center font-bold">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${clinicalMode === 'ayurveda' ? 'bg-[#8B5A2B]' : 'bg-[#2F5D62]'}`}>
             <HeartPulse className="w-6 h-6 text-[#EAF3F2]" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-[#2F5D62]">{currentLang.app_title}</h1>
-            <p className="text-xs text-slate-500">{currentLang.name} ({currentLang.native})</p>
+            <div className="flex items-center gap-2">
+              <h1 className={`text-lg font-bold ${clinicalMode === 'ayurveda' ? 'text-[#8B5A2B]' : 'text-[#2F5D62]'}`}>{currentLang.app_title}</h1>
+              {clinicalMode === 'ayurveda' && (
+                <span className="bg-amber-100 text-[#8B5A2B] border border-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  🌿 Ministry of AYUSH
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">{currentLang.name} ({currentLang.native}) {clinicalMode === 'ayurveda' ? '• आयुर्वेद क्लिनिकल मोड' : '• OPD Kiosk'}</p>
           </div>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {clinicalMode === 'ayurveda' ? (
+            <button 
+              onClick={handleDisableAyushMode}
+              className="touch-target bg-amber-50 text-[#8B5A2B] border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-100"
+              title="Click to switch back to Allopathy"
+            >
+              <span>🌿 AYUSH Active (Click to Exit)</span>
+            </button>
+          ) : (
+            <button 
+              onClick={() => { setShowAyushModal(true); setAyushError(null); setAyushPasswordInput(''); }}
+              className="touch-target bg-emerald-50 text-[#2E7D4F] border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-100 transition-all"
+              title="Activate Ministry of AYUSH Mode (Password Protected)"
+            >
+              <span>🌿 Ministry of AYUSH Mode</span>
+            </button>
+          )}
+
           <button 
             onClick={() => setStep('language')}
             className="touch-target bg-slate-100 text-[#2F5D62] border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-200"
@@ -994,9 +1064,68 @@ export default function KioskPortal() {
         </div>
       </header>
 
+      {/* AYUSH PASSWORD VERIFICATION MODAL */}
+      {showAyushModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border-2 border-amber-300 shadow-2xl animate-in fade-in duration-200">
+            <div className="text-center mb-5">
+              <div className="w-16 h-16 bg-amber-100 text-[#8B5A2B] rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl">
+                🌿
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900">Ministry of AYUSH Mode</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Enter the authorized clinical password to activate Tridosha (Vata-Pitta-Kapha) & Agni intake portal.
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Authorized Password</label>
+                <input 
+                  type="password" 
+                  value={ayushPasswordInput}
+                  onChange={e => setAyushPasswordInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAyushPasswordSubmit()}
+                  placeholder="Enter password (e.g. Ayurveda)"
+                  className="w-full p-3.5 border-2 border-slate-300 rounded-xl text-base font-bold text-slate-900 focus:border-[#8B5A2B] outline-none"
+                  autoFocus
+                />
+              </div>
+
+              {ayushError && (
+                <p className="text-xs font-bold text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                  {ayushError}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowAyushModal(false)}
+                className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAyushPasswordSubmit}
+                className="w-full py-3 rounded-xl bg-[#8B5A2B] text-white font-bold text-sm hover:bg-amber-900 transition-all shadow-md"
+              >
+                Verify & Activate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* STEP 1: MULTI-LANGUAGE SELECTION GRID (10 INDIAN LANGUAGES) */}
       {step === 'language' && (
         <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm text-center my-auto">
+          {clinicalMode === 'ayurveda' && (
+            <div className="bg-amber-50 border border-amber-300 text-[#8B5A2B] p-3 rounded-2xl mb-5 flex items-center justify-center gap-2 text-xs font-bold">
+              <span>🌿 Ministry of AYUSH Mode is ACTIVE — Ayurvedic Prakriti & Tridosha Intake Enabled</span>
+            </div>
+          )}
+
           <div className="w-16 h-16 rounded-2xl bg-[#EAF3F2] text-[#2F5D62] flex items-center justify-center mx-auto mb-4">
             <Globe className="w-8 h-8" />
           </div>
@@ -1004,7 +1133,7 @@ export default function KioskPortal() {
           <p className="text-slate-600 text-sm mb-6">{currentLang.select_subtitle}</p>
 
           {/* 10 Regional Languages Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 max-w-4xl mx-auto mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 max-w-4xl mx-auto mb-6">
             {Object.entries(LOCALIZED_LANGUAGES).map(([code, pack]) => (
               <button
                 key={code}
@@ -1021,7 +1150,23 @@ export default function KioskPortal() {
             ))}
           </div>
 
-          <p className="text-xs text-slate-400">{currentLang.select_footer}</p>
+          <div className="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
+            {clinicalMode !== 'ayurveda' ? (
+              <button
+                onClick={() => { setShowAyushModal(true); setAyushError(null); setAyushPasswordInput(''); }}
+                className="text-xs font-bold text-[#8B5A2B] bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2 rounded-xl flex items-center gap-2 transition-all"
+              >
+                <span>🌿 Switch to Ministry of AYUSH Mode (Password Protected)</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleDisableAyushMode}
+                className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl"
+              >
+                Exit AYUSH Mode
+              </button>
+            )}
+          </div>
         </div>
       )}
 

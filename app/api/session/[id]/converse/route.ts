@@ -41,6 +41,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       [sessionId, section, field_name, answerValue, rawAnswerId]
     );
 
+    // If demographic field, update sessions table directly
+    if (field_name === 'patient_name' || section === 'demographics' && field_name.includes('name')) {
+      await query(
+        `UPDATE sessions SET patient_name = $1, patient_ref = $1 WHERE id = $2`,
+        [answerValue, sessionId]
+      );
+    } else if (field_name === 'gender') {
+      await query(
+        `UPDATE sessions SET gender = $1 WHERE id = $2`,
+        [answerValue, sessionId]
+      );
+    } else if (field_name === 'age') {
+      await query(
+        `UPDATE sessions SET age = $1 WHERE id = $2`,
+        [answerValue, sessionId]
+      );
+    }
+
     // 4. Check Deterministic Red-Flag Rule Engine
     const redFlagTrigger = checkRedFlagRules(answerValue, section, field_name, answerValue);
     if (redFlagTrigger) {
@@ -76,38 +94,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }));
 
     const turnCount = historyItems.length;
+    const clinicalMode = session?.clinical_mode || 'allopathy';
 
-    // 6. Generate next conversational question intelligently via Mistral AI
-    const aiResponse = await generateConversationalFollowUp(historyItems, language, turnCount);
+    // 6. Generate next conversational question intelligently via Mistral AI in < 1.5s
+    const aiResponse = await generateConversationalFollowUp(historyItems, language, turnCount, clinicalMode);
 
-    const isCompleted = Boolean(aiResponse.is_intake_complete || turnCount >= 6);
+    const isCompleted = Boolean(aiResponse.is_intake_complete || turnCount >= 8);
 
-    // 7. Auto-update live draft summary so the Clinician Dashboard updates immediately
-    try {
-      const entitiesRes = await query(`SELECT * FROM extracted_entities WHERE session_id = $1`, [sessionId]);
-      const summaryJSON = await generateBilingualSummary(allHistoryRes.rows, entitiesRes.rows, language);
-      
-      const inputHash = `hash_${Date.now()}_${turnCount}`;
-      await query(
-        `INSERT INTO draft_summaries (session_id, model_name, model_version, prompt_version, content, input_hash)
-         VALUES ($1, 'mistral-small-latest', 'v1.0', 'p1.0', $2, $3)`,
-        [sessionId, JSON.stringify(summaryJSON), inputHash]
-      );
-    } catch (summaryErr) {
-      console.warn('Live summary background generation notice:', summaryErr);
-    }
-
+    // 7. If completed, mark status; draft summary can be generated on-demand by the summary route or in the background
     if (isCompleted) {
       await query(`UPDATE sessions SET status = 'completed', ended_at = NOW() WHERE id = $1`, [sessionId]);
+      
+      // Asynchronously generate the final summary without blocking if completed
+      (async () => {
+        try {
+          const entitiesRes = await query(`SELECT * FROM extracted_entities WHERE session_id = $1`, [sessionId]);
+          const summaryJSON = await generateBilingualSummary(allHistoryRes.rows, entitiesRes.rows, language, clinicalMode);
+          const inputHash = `hash_${Date.now()}_complete`;
+          await query(
+            `INSERT INTO draft_summaries (session_id, model_name, model_version, prompt_version, content, input_hash)
+             VALUES ($1, 'mistral-small-latest', 'v1.0', 'p1.0', $2, $3)`,
+            [sessionId, JSON.stringify(summaryJSON), inputHash]
+          );
+        } catch (sumErr) {
+          console.warn('Async summary generation notice:', sumErr);
+        }
+      })();
     }
 
+    const isEnglish = language === 'en';
     const nextQuestion = isCompleted ? null : {
       id: `q_${aiResponse.field_name || Date.now()}`,
-      question_localized: aiResponse.question_localized || aiResponse.question_hi || 'कृपया अपनी समस्या बताएं',
+      question_localized: aiResponse.question_localized || (isEnglish ? 'Please describe your symptoms in detail.' : 'कृपया अपनी समस्या बताएं'),
       question_en: aiResponse.question_en || 'Please describe your symptoms',
       section: aiResponse.section || 'hpi',
       field_name: aiResponse.field_name || 'clinical_note',
-      options: aiResponse.options || ['हाँ / Yes', 'नहीं / No', 'पता नहीं / Not sure']
+      options: aiResponse.options || (isEnglish ? ['Yes', 'No', 'Not sure'] : ['हाँ / Yes', 'नहीं / No', 'पता नहीं / Not sure'])
     };
 
     return NextResponse.json({
@@ -115,7 +137,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       answered_question_id: question_id,
       next_question: nextQuestion,
       is_completed: isCompleted,
-      turn_count: turnCount
+      turn_count: turnCount,
+      clinical_mode: clinicalMode
     });
   } catch (err: any) {
     console.error('Error in converse turn:', err);

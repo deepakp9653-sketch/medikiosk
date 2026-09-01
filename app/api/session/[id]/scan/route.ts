@@ -127,18 +127,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
+    // Save AYUSH remedies or traditional formulations
+    if (extractedData.ayush_remedies && Array.isArray(extractedData.ayush_remedies)) {
+      for (const remedy of extractedData.ayush_remedies) {
+        const remName = typeof remedy === 'string' ? remedy : (remedy.name || JSON.stringify(remedy));
+        const confidence = typeof remedy?.confidence === 'number' ? remedy.confidence : 0.90;
+        const fieldsObj = typeof remedy === 'object' && remedy !== null ? remedy : { name: remName };
+
+        try {
+          const res = await query(
+            `INSERT INTO extracted_entities (session_id, source_doc_id, entity_type, raw_text, confidence, needs_verification, fields)
+             VALUES ($1, $2, 'ayush_remedy', $3, $4, false, $5::jsonb)
+             RETURNING *`,
+            [sessionId, docUploadId, remName, confidence, JSON.stringify(fieldsObj)]
+          );
+          entityInserts.push(res.rows[0]);
+        } catch (e: any) {
+          console.warn('AYUSH remedy entity insert notice:', e.message);
+        }
+      }
+    }
+
     // 5. Automatically refresh the bilingual clinical summary with the newly extracted evidence
     try {
       const allEntitiesRes = await query(`SELECT * FROM extracted_entities WHERE session_id = $1`, [sessionId]);
-      const sessionInfo = await query(`SELECT preferred_language FROM sessions WHERE id = $1`, [sessionId]);
-      const lang = sessionInfo.rows[0]?.preferred_language || 'hi';
+      const sessionInfo = await query(`SELECT language, clinical_mode FROM sessions WHERE id = $1`, [sessionId]);
+      const lang = sessionInfo.rows[0]?.language || 'hi';
+      const clinicalMode = sessionInfo.rows[0]?.clinical_mode || 'allopathy';
 
-      const summaryJSON = await generateBilingualSummary(historyRes.rows, allEntitiesRes.rows, lang);
+      const summaryJSON = await generateBilingualSummary(historyRes.rows, allEntitiesRes.rows, lang, clinicalMode);
       const inputHash = `hash_${Date.now()}_scan`;
 
       await query(
         `INSERT INTO draft_summaries (session_id, model_name, model_version, prompt_version, content, input_hash)
-         VALUES ($1, 'mistral-small-latest', 'v1.0', 'p1.0', $2::jsonb, $3)`,
+         VALUES ($1, 'mistral-small-latest', 'v1.0', 'p1.0', $2, $3)`,
         [sessionId, JSON.stringify(summaryJSON), inputHash]
       );
     } catch (sumErr: any) {

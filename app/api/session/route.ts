@@ -39,7 +39,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { language = 'hi', queue_id, abha_mock_id, patient_ref } = body;
+    const { language = 'hi', queue_id, abha_mock_id, patient_ref, clinical_mode = 'allopathy' } = body;
 
     let assignedQueueId = queue_id;
 
@@ -61,14 +61,40 @@ export async function POST(req: Request) {
       assignedQueueId = `Q-${nextNum}`;
     }
 
-    const res = await query(
-      `INSERT INTO sessions (language, queue_id, abha_mock_id, patient_ref, status)
-       VALUES ($1, $2, $3, $4, 'in_progress')
-       RETURNING *`,
-      [language, assignedQueueId, abha_mock_id || null, patient_ref || 'PATIENT_GUEST']
-    );
+    // Try ensuring column exists without throwing
+    try {
+      await query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS clinical_mode VARCHAR(50) DEFAULT 'allopathy'`);
+    } catch {}
+
+    let res;
+    try {
+      res = await query(
+        `INSERT INTO sessions (language, queue_id, abha_mock_id, patient_ref, status, clinical_mode)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5)
+         RETURNING *`,
+        [language, assignedQueueId, abha_mock_id || null, patient_ref || 'PATIENT_GUEST', clinical_mode]
+      );
+    } catch {
+      res = await query(
+        `INSERT INTO sessions (language, queue_id, abha_mock_id, patient_ref, status)
+         VALUES ($1, $2, $3, $4, 'in_progress')
+         RETURNING *`,
+        [language, assignedQueueId, abha_mock_id || null, patient_ref || 'PATIENT_GUEST']
+      );
+    }
 
     const session = res.rows[0];
+
+    // If in Ayurveda mode, insert initial AYUSH tag in structured_history
+    if (clinical_mode === 'ayurveda') {
+      try {
+        await query(
+          `INSERT INTO structured_history (session_id, section, field_name, value, confidence)
+           VALUES ($1, 'ayush_profile', 'clinical_intake_mode', 'Ministry of AYUSH Ayurvedic Mode Active', 1.0)`,
+          [session.id]
+        );
+      } catch {}
+    }
 
     // Log Audit
     await query(
