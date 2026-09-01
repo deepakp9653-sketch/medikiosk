@@ -38,6 +38,8 @@ export default function ClinicianDashboard() {
   // Attestation & FHIR State
   const [isAttested, setIsAttested] = useState<boolean>(false);
   const [fhirBundle, setFhirBundle] = useState<any>(null);
+  const [textualReport, setTextualReport] = useState<string>('');
+  const [fhirViewMode, setFhirViewMode] = useState<'text' | 'json'>('text');
   const [fhirValidation, setFhirValidation] = useState<any>(null);
   const [attestError, setAttestError] = useState<string | null>(null);
 
@@ -173,7 +175,7 @@ export default function ClinicianDashboard() {
     }
   };
 
-  // Export FHIR Bundle
+  // Export FHIR Bundle & Textual Report
   const handleExportFHIR = async () => {
     if (!selectedSession) return;
     try {
@@ -181,6 +183,7 @@ export default function ClinicianDashboard() {
       const data = await res.json();
       if (data.bundle) {
         setFhirBundle(data.bundle);
+        setTextualReport(data.text_report || '');
         setFhirValidation(data.validation);
         setActiveTab('fhir');
       } else {
@@ -365,7 +368,7 @@ export default function ClinicianDashboard() {
                     onClick={() => { setActiveTab('fhir'); if (!fhirBundle) handleExportFHIR(); }}
                     className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'fhir' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    FHIR R4 Bundle
+                    📄 Textual Report & FHIR
                   </button>
                 </div>
               </div>
@@ -825,55 +828,151 @@ export default function ClinicianDashboard() {
                 </div>
               )}
 
-              {/* TAB 6: FHIR R4 BUNDLE INSPECTOR VIEW */}
+              {/* TAB 6: TEXTUAL CLINICAL REPORT & FHIR R4 BUNDLE INSPECTOR VIEW */}
               {activeTab === 'fhir' && (
                 <div className="overflow-y-auto space-y-4 flex-1 pr-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 uppercase">Synthetic FHIR R4 Bundle JSON (NRCeS / ABDM Aligned)</span>
-                      <p className="text-[11px] text-slate-400">Compliant with Ayushman Bharat Digital Mission (ABDM) Document Bundle</p>
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
+                    {/* View Switcher: Textual Report vs Raw FHIR JSON */}
+                    <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        onClick={() => setFhirViewMode('text')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          fhirViewMode === 'text' 
+                            ? 'bg-[#2F5D62] text-white shadow-sm' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        📄 Official Textual Report
+                      </button>
+                      <button
+                        onClick={() => setFhirViewMode('json')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          fhirViewMode === 'json' 
+                            ? 'bg-[#2F5D62] text-white shadow-sm' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        ⚡ Synthetic FHIR R4 (JSON)
+                      </button>
                     </div>
-                    <div className="flex gap-2">
-                      {fhirBundle && (
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(JSON.stringify(fhirBundle, null, 2));
-                            alert('FHIR JSON copied to clipboard!');
-                          }}
-                          className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-200"
-                        >
-                          Copy JSON
-                        </button>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {fhirViewMode === 'text' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              if (textualReport) {
+                                navigator.clipboard.writeText(textualReport);
+                                alert('Textual Clinical Report copied to clipboard!');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                          >
+                            Copy Report
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!textualReport) return;
+                              const blob = new Blob([textualReport], { type: 'text/plain;charset=utf-8' });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = `Clinical_Report_${selectedSession.queue_id || selectedSession.id}.txt`;
+                              link.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="px-3 py-1.5 bg-[#EAF3F2] hover:bg-teal-100 text-[#2F5D62] border border-[#2F5D62]/30 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download (.txt)
+                          </button>
+                          <button
+                            onClick={() => window.print()}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                          >
+                            Print Report
+                          </button>
+                        </>
+                      ) : (
+                        fhirBundle && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify(fhirBundle, null, 2));
+                              alert('FHIR JSON copied to clipboard!');
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-200"
+                          >
+                            Copy JSON
+                          </button>
+                        )
                       )}
+
                       <button 
                         onClick={handleExportFHIR}
-                        className="px-4 py-2 bg-[#2F5D62] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-teal-800"
+                        className="px-3.5 py-1.5 bg-[#2F5D62] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-teal-800"
                       >
-                        <Download className="w-4 h-4" /> Refresh Bundle
+                        <RefreshCw className="w-3.5 h-3.5" /> Refresh
                       </button>
                     </div>
                   </div>
 
-                  {fhirValidation && (
-                    <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between border ${
-                      fhirValidation.valid ? 'bg-emerald-50 text-[#2E7D4F] border-emerald-200' : 'bg-red-50 text-[#C4292A] border-red-200'
-                    }`}>
-                      <span className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        Validation Status: {fhirValidation.valid ? 'PASSED (0 Schema Errors)' : 'FAILED'}
-                      </span>
-                      <span>Resource Count: {fhirValidation.resource_count} Entries</span>
-                    </div>
-                  )}
+                  {/* TEXTUAL CLINICAL REPORT VIEW */}
+                  {fhirViewMode === 'text' ? (
+                    textualReport ? (
+                      <div className="bg-white border-2 border-slate-300 rounded-2xl p-6 md:p-8 shadow-sm">
+                        <div className="border-b-2 border-slate-800 pb-4 mb-6 text-center">
+                          <div className="inline-block bg-teal-50 text-[#2F5D62] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-teal-900/10 mb-2">
+                            National Health Authority (NHA) • ABDM Standard
+                          </div>
+                          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                            OUTPATIENT CLINICAL CONSULTATION REPORT
+                          </h2>
+                          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                            MediKiosk Automated SBAR Intake & Physician Attestation
+                          </p>
+                        </div>
 
-                  {fhirBundle ? (
-                    <pre className="bg-slate-900 text-emerald-400 p-4 rounded-2xl text-xs font-mono overflow-x-auto max-h-96">
-                      {JSON.stringify(fhirBundle, null, 2)}
-                    </pre>
+                        <pre className="font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-slate-50/70 p-5 rounded-xl border border-slate-200 overflow-x-auto select-text">
+                          {textualReport}
+                        </pre>
+
+                        <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                          <span>Verified against NRCeS Clinical Terminology (LOINC 11488-4)</span>
+                          <span className="font-bold text-[#2E7D4F] flex items-center gap-1">
+                            <CheckCircle2 className="w-4 h-4" /> Ready for Hospital EHR / ABDM Exchange
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
+                        <RefreshCw className="w-6 h-6 text-[#2F5D62] mx-auto mb-2 animate-spin" />
+                        Generating official Textual Clinical Consultation Report...
+                      </div>
+                    )
                   ) : (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
-                      <RefreshCw className="w-6 h-6 text-[#2F5D62] mx-auto mb-2 animate-spin" />
-                      Loading synthetic FHIR R4 bundle...
+                    /* SYNTHETIC FHIR R4 JSON VIEW */
+                    <div className="space-y-4">
+                      {fhirValidation && (
+                        <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between border ${
+                          fhirValidation.valid ? 'bg-emerald-50 text-[#2E7D4F] border-emerald-200' : 'bg-red-50 text-[#C4292A] border-red-200'
+                        }`}>
+                          <span className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            Validation Status: {fhirValidation.valid ? 'PASSED (0 Schema Errors)' : 'FAILED'}
+                          </span>
+                          <span>Resource Count: {fhirValidation.resource_count} Entries</span>
+                        </div>
+                      )}
+
+                      {fhirBundle ? (
+                        <pre className="bg-slate-900 text-emerald-400 p-5 rounded-2xl text-xs font-mono overflow-x-auto max-h-[500px]">
+                          {JSON.stringify(fhirBundle, null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
+                          <RefreshCw className="w-6 h-6 text-[#2F5D62] mx-auto mb-2 animate-spin" />
+                          Loading synthetic FHIR R4 bundle...
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

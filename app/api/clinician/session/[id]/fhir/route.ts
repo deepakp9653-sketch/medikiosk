@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { buildSyntheticFHIRBundle, validateFHIRBundleSchema } from '@/lib/fhir';
+import { buildSyntheticFHIRBundle, validateFHIRBundleSchema, generateTextualClinicalReport } from '@/lib/fhir';
 
 async function handleFHIRGeneration(sessionId: string) {
   // 1. Fetch session record
@@ -49,10 +49,13 @@ async function handleFHIRGeneration(sessionId: string) {
   // 4. Generate synthetic FHIR R4 Bundle with correct argument order: (record, session)
   const fhirBundle = buildSyntheticFHIRBundle(recordToBundle, session);
 
-  // 5. Validate FHIR Bundle Schema
+  // 5. Generate human-readable Textual Clinical Report
+  const textReport = generateTextualClinicalReport(session, recordToBundle);
+
+  // 6. Validate FHIR Bundle Schema
   const validation = validateFHIRBundleSchema(fhirBundle);
 
-  // 6. If attested, persist into fhir_bundles table
+  // 7. If attested, persist into fhir_bundles table
   let bundleDbId = null;
   if (attestedRecord) {
     try {
@@ -72,6 +75,7 @@ async function handleFHIRGeneration(sessionId: string) {
     success: true,
     is_attested: Boolean(attestedRecord),
     bundle: fhirBundle,
+    text_report: textReport,
     validation,
     record_id: bundleDbId
   });
