@@ -95,9 +95,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const turnCount = historyItems.length;
     const clinicalMode = session?.clinical_mode || 'allopathy';
+    const patientName = session?.patient_name || undefined;
 
     // 6. Generate next conversational question intelligently via Mistral AI in < 1.5s
-    const aiResponse = await generateConversationalFollowUp(historyItems, language, turnCount, clinicalMode);
+    const aiResponse = await generateConversationalFollowUp(historyItems, language, turnCount, clinicalMode, patientName);
 
     const isCompleted = Boolean(aiResponse.is_intake_complete || turnCount >= 8);
 

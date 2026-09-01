@@ -219,7 +219,8 @@ export async function generateConversationalFollowUp(
   history: Array<{ question: string; answer: string; section?: string; field_name?: string }>,
   patientLangCode: string = 'hi',
   turnCount: number = 1,
-  clinicalMode: string = 'allopathy'
+  clinicalMode: string = 'allopathy',
+  patientName?: string
 ) {
   const langConfig = SUPPORTED_LANGUAGES[patientLangCode] || SUPPORTED_LANGUAGES.en;
   const isEnglish = patientLangCode === 'en';
@@ -236,6 +237,7 @@ export async function generateConversationalFollowUp(
     
     CURRENT CLINICAL TURN: ${turnCount} / 6
     PATIENT CHOSEN LANGUAGE: ${langConfig.name} (${langConfig.native}) [Code: ${patientLangCode}]
+    ${patientName ? `PATIENT NAME: "${patientName}". You MUST address the patient respectfully by name (e.g. "${patientName} जी," or "${patientName} garu," or "Hello ${patientName}," or "${patientName} avargale,") in "question_localized" and "question_en".` : ''}
 
     STRICT LANGUAGE ENFORCEMENT RULES (CRITICAL):
     ${isEnglish ? `
@@ -262,6 +264,7 @@ export async function generateConversationalFollowUp(
     INSTRUCTIONS:
     - Based on what the patient answered, dynamically formulate the next logical, intelligent clinical follow-up question.
     - Tailor the question specifically to the symptom they stated.
+    ${patientName ? `- Address the patient respectfully by name "${patientName}".` : ''}
     - If ${turnCount} >= 5, or if sufficient details are collected, set "is_intake_complete": true.
     
     CRITICAL SAFETY RULE:

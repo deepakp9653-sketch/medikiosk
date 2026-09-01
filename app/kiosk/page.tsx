@@ -47,15 +47,25 @@ interface LanguagePack {
   consent_decline: string;
   consent_prompt: string;
 
-  // Identify Screen
+  // Identify Screen & Demographics
   identify_title: string;
   identify_subtitle: string;
+  name_label: string;
+  name_placeholder: string;
+  speak_name_btn: string;
+  age_label: string;
+  gender_label: string;
+  male_opt: string;
+  female_opt: string;
+  other_opt: string;
   scan_qr_title: string;
   scan_qr_desc: string;
   queue_id_label: string;
   abha_id_label: string;
   start_interview_btn: string;
   identify_prompt: string;
+  demographics_prompt: string;
+  greeting_honorific: string;
 
   // Interview Screen
   section_label: string;
@@ -111,14 +121,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'सहमति दें और आगे बढ़ें',
     consent_decline: 'अस्वीकार करें',
     consent_prompt: 'कृपया डेटा सहमति को ध्यान से सुनें और स्वीकार करें।',
-    identify_title: 'रोगी पहचान एवं पंजीकरण',
-    identify_subtitle: 'पर्ची का क्यूआर कोड स्कैन करें या टोकन नंबर दर्ज करें।',
+    identify_title: 'रोगी पहचान एवं विवरण',
+    identify_subtitle: 'कृपया अपना नाम, उम्र और लिंग दर्ज करें।',
+    name_label: 'रोगी का पूरा नाम',
+    name_placeholder: 'उदा. राकेश शर्मा',
+    speak_name_btn: 'बोलकर नाम बताएं',
+    age_label: 'आपकी उम्र (वर्ष)',
+    gender_label: 'आपका लिंग',
+    male_opt: 'पुरुष / Male',
+    female_opt: 'महिला / Female',
+    other_opt: 'अन्य / Other',
     scan_qr_title: 'आभा / टोकन क्यूआर कोड स्कैन करें',
     scan_qr_desc: 'पंजीकरण पर्ची को कैमरे के सामने रखें',
     queue_id_label: 'टोकन / कतार संख्या',
     abha_id_label: 'आभा स्वास्थ्य पहचान पत्र (वैकल्पिक)',
     start_interview_btn: 'स्वास्थ्य साक्षात्कार शुरू करें',
-    identify_prompt: 'कृपया अपना टोकन नंबर दर्ज करें या क्यूआर पर्ची स्कैन करें।',
+    identify_prompt: 'कृपया अपना नाम, उम्र और लिंग बताएं।',
+    demographics_prompt: 'कृपया अपना पूरा नाम, उम्र और लिंग बताएं।',
+    greeting_honorific: 'जी',
     section_label: 'विभाग',
     mode_badge: 'हिन्दी वॉइस व टच मोड',
     self_report_note: 'डॉक्टर की समीक्षा के लिए रोगी द्वारा दी गई जानकारी',
@@ -164,14 +184,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'Agree & Continue',
     consent_decline: 'Decline',
     consent_prompt: 'Please listen carefully to the data consent notice and tap agree to proceed.',
-    identify_title: 'Patient Identification & Check-In',
-    identify_subtitle: 'Scan your registration QR slip or enter your Queue Token ID.',
+    identify_title: 'Patient Details & Demographics',
+    identify_subtitle: 'Please provide your full name, age, and gender before the consultation.',
+    name_label: 'Patient Full Name',
+    name_placeholder: 'e.g. John Doe',
+    speak_name_btn: 'Speak Name',
+    age_label: 'Your Age (Years)',
+    gender_label: 'Your Gender',
+    male_opt: 'Male',
+    female_opt: 'Female',
+    other_opt: 'Other',
     scan_qr_title: 'Scan ABHA / Token QR Code',
     scan_qr_desc: 'Hold your registration slip in front of the camera',
     queue_id_label: 'Queue Token ID',
     abha_id_label: 'ABHA Health ID (Optional)',
     start_interview_btn: 'Start Health Interview',
-    identify_prompt: 'Please enter your queue ticket ID or scan your registration slip.',
+    identify_prompt: 'Please state your full name, age, and gender.',
+    demographics_prompt: 'Please provide your full name, age, and gender to proceed.',
+    greeting_honorific: '',
     section_label: 'Section',
     mode_badge: 'English Voice & Touch Mode',
     self_report_note: 'Self-reported intake information for physician review',
@@ -218,13 +248,23 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_decline: 'नाकारा',
     consent_prompt: 'कृपया डेटा संमती काळजीपूर्वक ऐका आणि पुढे जाण्यासाठी स्वीकारा.',
     identify_title: 'रुग्ण ओळख आणि नोंदणी',
-    identify_subtitle: 'नोंदणी पावतीवरील क्यूआर कोड स्कॅन करा किंवा टोकन क्रमांक टाका.',
+    identify_subtitle: 'कृपया आपले पूर्ण नाव, वय आणि लिंग सांगा.',
+    name_label: 'रुग्णाचे पूर्ण नाव',
+    name_placeholder: 'उदा. रमेश पाटील',
+    speak_name_btn: 'नाव बोला',
+    age_label: 'आपले वय (वर्षे)',
+    gender_label: 'आपले लिंग',
+    male_opt: 'पुरुष / Male',
+    female_opt: 'स्त्री / Female',
+    other_opt: 'इतर / Other',
     scan_qr_title: 'आभा / टोकन क्यूआर स्कॅन करा',
     scan_qr_desc: 'नोंदणी पावती कॅमेऱ्यासमोर धरा',
     queue_id_label: 'टोकन / रांग क्रमांक',
     abha_id_label: 'आभा हेल्थ कार्ड नंबर (पर्यायी)',
     start_interview_btn: 'आरोग्य चौकशी सुरू करा',
-    identify_prompt: 'कृपया तुमचा टोकन क्रमांक टाका किंवा पावती स्कॅन करा.',
+    identify_prompt: 'कृपया आपले पूर्ण नाव, वय आणि लिंग सांगा.',
+    demographics_prompt: 'कृपया आपले पूर्ण नाव, वय आणि लिंग सांगा.',
+    greeting_honorific: 'जी',
     section_label: 'विभाग',
     mode_badge: 'मराठी व्हॉइस आणि टच मोड',
     self_report_note: 'डॉक्टरांच्या तपासणीसाठी रुग्णाने दिलेली माहिती',
@@ -270,14 +310,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'সম্মতি দিন ও এগিয়ে যান',
     consent_decline: 'প্রত্যাখ্যান করুন',
     consent_prompt: 'অনুগ্রহ করে ডেটা সম্মতির বিজ্ঞপ্তিটি শুনুন এবং সম্মতি দিন।',
-    identify_title: 'রোগীর পরিচয় ও নিবন্ধন',
-    identify_subtitle: 'নিবন্ধন স্লিপের কিউআর কোড স্ক্যান করুন অথবা টোকেন নম্বর লিখুন।',
+    identify_title: 'রোগীর পরিচয় ও বিবরণ',
+    identify_subtitle: 'অনুগ্রহ করে আপনার পুরো নাম, বয়স এবং লিঙ্গ জানান।',
+    name_label: 'রোগীর পুরো নাম',
+    name_placeholder: 'উদাঃ সুব্রত দাস',
+    speak_name_btn: 'নাম বলুন',
+    age_label: 'আপনার বয়স (বছরে)',
+    gender_label: 'আপনার লিঙ্গ',
+    male_opt: 'পুরুষ / Male',
+    female_opt: 'মহিলা / Female',
+    other_opt: 'অন্যান্য / Other',
     scan_qr_title: 'আভা / টোকেন কিউআর কোড স্ক্যান করুন',
     scan_qr_desc: 'ক্যামেরার সামনে স্লিপটি ধরুন',
     queue_id_label: 'টোকেন / কিউ নম্বর',
     abha_id_label: 'আভা হেলথ আইডি (ঐচ্ছিক)',
     start_interview_btn: 'স্বাস্থ্য সাক্ষাৎকার শুরু করুন',
-    identify_prompt: 'অনুগ্রহ করে আপনার টোকেন নম্বর লিখুন বা স্লিপ স্ক্যান করুন।',
+    identify_prompt: 'অনুগ্রহ করে আপনার পুরো নাম, বয়স এবং লিঙ্গ বলুন।',
+    demographics_prompt: 'অনুগ্রহ করে আপনার পুরো নাম, বয়স এবং লিঙ্গ জানান।',
+    greeting_honorific: 'বাবু',
     section_label: 'বিভাগ',
     mode_badge: 'বাংলা ভয়েস ও স্পর্শ মোড',
     self_report_note: 'ডাক্তারের পরীক্ষার জন্য রোগীর দ্বারা প্রদত্ত তথ্য',
@@ -323,14 +373,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'అంగీకరించి ముందుకు సాగండి',
     consent_decline: 'తిరస్కరించండి',
     consent_prompt: 'దయచేసి డేటా సమ్మతి నోటీసును విని అంగీకరించండి.',
-    identify_title: 'రోగి గుర్తింపు మరియు నమోదు',
-    identify_subtitle: 'రిజిస్ట్రేషన్ స్లిప్ క్యూఆర్ కోడ్ స్కాన్ చేయండి లేదా టోకెన్ నంబర్ నమోదు చేయండి.',
+    identify_title: 'రోగి వివరాలు మరియు నమోదు',
+    identify_subtitle: 'దయచేసి మీ పూర్తి పేరు, వయస్సు మరియు లింగం తెలపండి.',
+    name_label: 'రోగి పూర్తి పేరు',
+    name_placeholder: 'ఉదా. రమేష్ వర్మ',
+    speak_name_btn: 'పేరు చెప్పండి',
+    age_label: 'మీ వయస్సు (సంవత్సరాలలో)',
+    gender_label: 'మీ లింగం',
+    male_opt: 'పురుషుడు / Male',
+    female_opt: 'స్త్రీ / Female',
+    other_opt: 'ఇతర / Other',
     scan_qr_title: 'ఆభా / టోకెన్ క్యూఆర్ స్కాన్ చేయండి',
     scan_qr_desc: 'కెమెరా ముందు రిజిస్ట్రేషన్ స్లిప్ ఉంచండి',
     queue_id_label: 'టోకెన్ / క్యూ సంఖ్య',
     abha_id_label: 'ఆభా హెల్త్ ఐడీ (ఐచ్ఛికం)',
     start_interview_btn: 'ఆరోగ్య ఇంటర్వ్యూ ప్రారంభించండి',
-    identify_prompt: 'దయచేసి మీ టోకెన్ నంబర్ నమోదు చేయండి లేదా స్లిప్ స్కాన్ చేయండి.',
+    identify_prompt: 'దయచేసి మీ పూర్తి పేరు, వయస్సు మరియు లింగం చెప్పండి.',
+    demographics_prompt: 'దయచేసి మీ పూర్తి పేరు, వయస్సు మరియు లింగం తెలపండి.',
+    greeting_honorific: 'గారు',
     section_label: 'విభాగం',
     mode_badge: 'తెలుగు వాయిస్ & టచ్ మోడ్',
     self_report_note: 'వైద్యుల సమీక్ష కోసం రోగి తెలిపిన వివరాలు',
@@ -376,14 +436,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'ஏற்றுக்கொண்டு தொடரவும்',
     consent_decline: 'நிராகரிக்கவும்',
     consent_prompt: 'தயவுசெய்து தரவு ஒப்புதல் அறிவிப்பைக் கேட்டு ஏற்கவும்.',
-    identify_title: 'நோயாளி அடையாளம் மற்றும் பதிவு',
-    identify_subtitle: 'பதிவுச் சீட்டின் க்யூஆர் குறியீட்டை ஸ்கேன் செய்யவும் அல்லது டோக்கன் எண்ணை உள்ளிடவும்.',
+    identify_title: 'நோயாளி விவரங்கள் மற்றும் பதிவு',
+    identify_subtitle: 'தயவுசெய்து உங்கள் முழுப் பெயர், வயது மற்றும் பாலினத்தைக் குறிப்பிடவும்.',
+    name_label: 'நோயாளியின் முழுப் பெயர்',
+    name_placeholder: 'உதா. முருகன் சுந்தரம்',
+    speak_name_btn: 'பெயரைக் கூறுக',
+    age_label: 'உங்கள் வயது (ஆண்டுகளில்)',
+    gender_label: 'உங்கள் பாலினம்',
+    male_opt: 'ஆண் / Male',
+    female_opt: 'பெண் / Female',
+    other_opt: 'மற்றவை / Other',
     scan_qr_title: 'ஆபா / டோக்கன் க்யூஆர் ஸ்கேன் செய்யவும்',
     scan_qr_desc: 'பதிவுச் சீட்டை கேமரா முன் காட்டவும்',
     queue_id_label: 'டோக்கன் / வரிசை எண்',
     abha_id_label: 'ஆபா சுகாதார அட்டை எண் (விருப்பத்தேர்வு)',
     start_interview_btn: 'சுகாதார நேர்காணலைத் தொடங்குக',
-    identify_prompt: 'தயவுசெய்து டோக்கன் எண்ணை உள்ளிடவும் அல்லது சீட்டை ஸ்கேன் செய்யவும்.',
+    identify_prompt: 'தயவுசெய்து உங்கள் முழுப் பெயர், வயது மற்றும் பாலினத்தைச் சொல்லுங்கள்.',
+    demographics_prompt: 'தயவுசெய்து உங்கள் முழுப் பெயர், வயது மற்றும் பாலினத்தைக் குறிப்பிடவும்.',
+    greeting_honorific: 'அவர்களே',
     section_label: 'பிரிவு',
     mode_badge: 'தமிழ் குரல் மற்றும் தொடு முறை',
     self_report_note: 'மருத்துவர் பார்வைக்காக நோயாளி அளித்த விவரங்கள்',
@@ -429,14 +499,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'સંમતિ આપો અને આગળ વધો',
     consent_decline: 'અસ્વીકાર કરો',
     consent_prompt: 'કૃપા કરીને ડેટા સંમતિ સાંભળો અને સ્વીકારો.',
-    identify_title: 'દર્દી ઓળખ અને નોંધણી',
-    identify_subtitle: 'નોંધણી પાવતીનો ક્યુઆર કોડ સ્કેન કરો અથવા ટોકન નંબર દાખલ કરો.',
+    identify_title: 'દર્દી વિગતો અને નોંધણી',
+    identify_subtitle: 'કૃપા કરીને તમારું પૂરું નામ, ઉંમર અને લિંગ જણાવો.',
+    name_label: 'દર્દીનું પૂરું નામ',
+    name_placeholder: 'દા.ત. અજય પટેલ',
+    speak_name_btn: 'નામ બોલો',
+    age_label: 'તમારી ઉંમર (વર્ષ)',
+    gender_label: 'તમારું લિંગ',
+    male_opt: 'પુરુષ / Male',
+    female_opt: 'સ્ત્રી / Female',
+    other_opt: 'અન્ય / Other',
     scan_qr_title: 'આભા / ટોકન ક્યુઆર સ્કેન કરો',
     scan_qr_desc: 'કૅમેરા સામે પાવતી રાખો',
     queue_id_label: 'ટોકન / કતાર નંબર',
     abha_id_label: 'આભા હેલ્થ આઈડી (વૈકલ્પિક)',
     start_interview_btn: 'આરોગ્ય ઇન્ટરવ્યુ શરૂ કરો',
-    identify_prompt: 'કૃપા કરીને ટોકન નંબર દાખલ કરો અથવા પાવતી સ્કેન કરો.',
+    identify_prompt: 'કૃપા કરીને તમારું પૂરું નામ, ઉંમર અને લિંગ જણાવો.',
+    demographics_prompt: 'કૃપા કરીને તમારું પૂરું નામ, ઉંમર અને લિંગ જણાવો.',
+    greeting_honorific: 'ભાઈ/બહેન',
     section_label: 'વિભાગ',
     mode_badge: 'ગુજરાતી વૉઇસ અને ટચ મોડ',
     self_report_note: 'ડૉક્ટરની સમીક્ષા માટે દર્દી દ્વારા આપવામાં આવેલી માહિતી',
@@ -482,14 +562,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'ಒಪ್ಪಿ ಮುಂದುವರಿಯಿರಿ',
     consent_decline: 'ತಿರಸ್ಕರಿಸಿ',
     consent_prompt: 'ದಯವಿಟ್ಟು ಡೇಟಾ ಸಮ್ಮತಿ ಸೂಚನೆಯನ್ನು ಕೇಳಿ ಒಪ್ಪಿಕೊಳ್ಳಿ.',
-    identify_title: 'ರೋಗಿಯ ಗುರುತು ಮತ್ತು ನೋಂದಣಿ',
-    identify_subtitle: 'ನೋಂದಣಿ ಚೀಟಿಯ ಕ್ಯೂಆರ್ ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ ಅಥವಾ ಟೋಕನ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.',
+    identify_title: 'ರೋಗಿಯ ವಿವರಗಳು ಮತ್ತು ನೋಂದಣಿ',
+    identify_subtitle: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರು, ವಯಸ್ಸು ಮತ್ತು ಲಿಂಗವನ್ನು ತಿಳಿಸಿ.',
+    name_label: 'ರೋಗಿಯ ಪೂರ್ಣ ಹೆಸರು',
+    name_placeholder: 'ಉದಾ. ಸುರೇಶ್ ಗೌಡ',
+    speak_name_btn: 'ಹೆಸರು ಹೇಳಿ',
+    age_label: 'ನಿಮ್ಮ ವಯಸ್ಸು (ವರ್ಷಗಳಲ್ಲಿ)',
+    gender_label: 'ನಿಮ್ಮ ಲಿಂಗ',
+    male_opt: 'ಪುರುಷ / Male',
+    female_opt: 'ಮಹಿಳೆ / Female',
+    other_opt: 'ಇತರ / Other',
     scan_qr_title: 'ಆಭಾ / ಟೋಕನ್ ಕ್ಯೂಆರ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
     scan_qr_desc: 'ಕ್ಯಾಮೆರಾ ಮುಂದೆ ಚೀಟಿಯನ್ನು ಹಿಡಿಯಿರಿ',
     queue_id_label: 'ಟೋಕನ್ / ಸರತಿ ಸಂಖ್ಯೆ',
     abha_id_label: 'ಆಭಾ ಹೆಲ್ತ್ ಐಡಿ (ಐಚ್ಛಿಕ)',
     start_interview_btn: 'ಆರೋಗ್ಯ ಸಂದರ್ಶನ ಪ್ರಾರಂಭಿಸಿ',
-    identify_prompt: 'ದಯವಿಟ್ಟು ಟೋಕನ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ ಅಥವಾ ಚೀಟಿಯನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.',
+    identify_prompt: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರು, ವಯಸ್ಸು ಮತ್ತು ಲಿಂಗವನ್ನು ತಿಳಿಸಿ.',
+    demographics_prompt: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರು, ವಯಸ್ಸು ಮತ್ತು ಲಿಂಗವನ್ನು ನಮೂದಿಸಿ.',
+    greeting_honorific: 'ಅವರೇ',
     section_label: 'ವಿಭಾಗ',
     mode_badge: 'ಕನ್ನಡ ಧ್ವನಿ ಮತ್ತು ಸ್ಪರ್ಶ ಮೋಡ್',
     self_report_note: 'ವೈದ್ಯರ ಪರಿಶೀಲನೆಗಾಗಿ ರೋಗಿ ನೀಡಿರುವ ವಿವರಗಳು',
@@ -536,13 +626,23 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_decline: 'നിരസിക്കുക',
     consent_prompt: 'ദയവായി ഡാറ്റാ സമ്മത അറിയിപ്പ് കേട്ട് അംഗീകരിക്കുക.',
     identify_title: 'രോഗിയുടെ തിരിച്ചറിയലും രജിസ്ട്രേഷനും',
-    identify_subtitle: 'രജിസ്ട്രേഷൻ സ്ലിപ്പിലെ ക്യുആർ കോഡ് സ്കാൻ ചെയ്യുക അല്ലെങ്കിൽ ടോക്കൺ നമ്പർ നൽകുക.',
+    identify_subtitle: 'ദയവായി നിങ്ങളുടെ പൂർണ്ണമായ പേര്, പ്രായം, ലിംഗം എന്നിവ നൽകുക.',
+    name_label: 'രോഗിയുടെ പൂർണ്ണ നാമം',
+    name_placeholder: 'ഉദാ. പ്രമോദ് നായർ',
+    speak_name_btn: 'പേര് പറയുക',
+    age_label: 'നിങ്ങളുടെ പ്രായം (വർഷങ്ങളിൽ)',
+    gender_label: 'നിങ്ങളുടെ ലിംഗം',
+    male_opt: 'പുരുഷൻ / Male',
+    female_opt: 'സ്ത്രീ / Female',
+    other_opt: 'മറ്റുള്ളവ / Other',
     scan_qr_title: 'ആഭാ / ടോക്കൺ ക്യുആർ സ്കാൻ ചെയ്യുക',
     scan_qr_desc: 'ക്യാമറയ്ക്ക് മുന്നിൽ സ്ലിപ്പ് കാണിക്കുക',
     queue_id_label: 'ടോക്കൺ / ക്യൂ നമ്പർ',
     abha_id_label: 'ആഭാ ഹെൽത്ത് ഐഡി (നിർബന്ധമില്ല)',
     start_interview_btn: 'ആരോഗ്യ വിവരങ്ങൾ നൽകാൻ തുടങ്ങുക',
-    identify_prompt: 'ദയവായി ടോക്കൺ നമ്പർ നൽകുക അല്ലെങ്കിൽ സ്ലിപ്പ് സ്കാൻ ചെയ്യുക.',
+    identify_prompt: 'ദയവായി നിങ്ങളുടെ പേര്, പ്രായം, ലിംഗം എന്നിവ പറയുക.',
+    demographics_prompt: 'ദയവായി നിങ്ങളുടെ പേര്, പ്രായം, ലിംഗം എന്നിവ നൽകുക.',
+    greeting_honorific: '',
     section_label: 'വിഭാഗം',
     mode_badge: 'മലയാളം വോയ്‌സ് & ടച്ച് മോഡ്',
     self_report_note: 'ഡോക്ടറുടെ പരിശോധനയ്ക്കായി രോഗി നൽകിയ വിവരങ്ങൾ',
@@ -588,14 +688,24 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_agree: 'ਸਹਿਮਤ ਹੋਵੋ ਅਤੇ ਅੱਗੇ ਵਧੋ',
     consent_decline: 'ਅਸਵੀਕਾਰ ਕਰੋ',
     consent_prompt: 'ਕਿਰਪਾ ਕਰਕੇ ਡਾਟਾ ਸਹਿਮਤੀ ਸੁਣੋ ਅਤੇ ਸਵੀਕਾਰ ਕਰੋ।',
-    identify_title: 'ਮਰੀਜ਼ ਦੀ ਪਛਾਣ ਅਤੇ ਰਜਿਸਟ੍ਰੇਸ਼ਨ',
-    identify_subtitle: 'ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਪਰਚੀ ਦਾ ਕਿਊਆਰ ਕੋਡ ਸਕੈਨ ਕਰੋ ਜਾਂ ਟੋਕਨ ਨੰਬਰ ਦਰਜ ਕਰੋ।',
+    identify_title: 'ਮਰੀਜ਼ ਦੀ ਪਛਾਣ ਅਤੇ ਵੇਰਵੇ',
+    identify_subtitle: 'ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਨਾਮ, ਉਮਰ ਅਤੇ ਲਿੰਗ ਦਰਜ ਕਰੋ।',
+    name_label: 'ਮਰੀਜ਼ ਦਾ ਪੂਰਾ ਨਾਮ',
+    name_placeholder: 'ਉਦਾ. ਹਰਪ੍ਰੀਤ ਸਿੰਘ',
+    speak_name_btn: 'ਨਾਮ ਬੋਲੋ',
+    age_label: 'ਤੁਹਾਡੀ ਉਮਰ (ਸਾਲਾਂ ਵਿੱਚ)',
+    gender_label: 'ਤੁਹਾਡਾ ਲਿੰਗ',
+    male_opt: 'ਪੁਰਸ਼ / Male',
+    female_opt: 'ਮਹਿਲਾ / Female',
+    other_opt: 'ਹੋਰ / Other',
     scan_qr_title: 'ਆਭਾ / ਟੋਕਨ ਕਿਊਆਰ ਸਕੈਨ ਕਰੋ',
     scan_qr_desc: 'ਕੈਮਰੇ ਦੇ ਸਾਹਮਣੇ ਪਰਚੀ ਰੱਖੋ',
     queue_id_label: 'ਟੋਕਨ / ਕਤਾਰ ਨੰਬਰ',
     abha_id_label: 'ਆਭਾ ਹੈਲਥ ਆਈਡੀ (ਵਿਕਲਪਿਕ)',
     start_interview_btn: 'ਸਿਹਤ ਇੰਟਰਵਿਊ ਸ਼ੁਰੂ ਕਰੋ',
-    identify_prompt: 'ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਟੋਕਨ ਨੰਬਰ ਦਰਜ ਕਰੋ ਜਾਂ ਪਰਚੀ ਸਕੈਨ ਕਰੋ।',
+    identify_prompt: 'ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਨਾਮ, ਉਮਰ ਅਤੇ ਲਿੰਗ ਦੱਸੋ।',
+    demographics_prompt: 'ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਨਾਮ, ਉਮਰ ਅਤੇ ਲਿੰਗ ਦਰਜ ਕਰੋ।',
+    greeting_honorific: 'ਜੀ',
     section_label: 'ਵਿਭਾਗ',
     mode_badge: 'ਪੰਜਾਬੀ ਆਵਾਜ਼ ਅਤੇ ਟੱਚ ਮੋਡ',
     self_report_note: 'ਡਾਕਟਰ ਦੀ ਜਾਂਚ ਲਈ ਮਰੀਜ਼ ਦੁਆਰਾ ਦਿੱਤੀ ਗਈ ਜਾਣਕਾਰੀ',
@@ -633,6 +743,12 @@ export default function KioskPortal() {
   const [queueId, setQueueId] = useState<string>('Q-101');
   const [abhaId, setAbhaId] = useState<string>('');
   const [isGuardian, setIsGuardian] = useState<boolean>(false);
+
+  // Patient Demographics State (Name, Age, Gender)
+  const [patientName, setPatientName] = useState<string>('');
+  const [patientAge, setPatientAge] = useState<string>('35');
+  const [patientGender, setPatientGender] = useState<string>('Male');
+  const [isListeningForName, setIsListeningForName] = useState<boolean>(false);
   
   const currentLang = LOCALIZED_LANGUAGES[language] || LOCALIZED_LANGUAGES.hi;
 
@@ -696,7 +812,30 @@ export default function KioskPortal() {
     };
   }, []);
 
-  // Universal Instant Native Voice Audio Synthesis (Zero-Latency Browser SpeechSynthesis First)
+  // Universal Instant High-Fidelity Audio Synthesis across all 10 Indian Languages
+  const playServerTTS = (cleanText: string, targetLang: string) => {
+    const audioUrl = `/api/tts?lang=${encodeURIComponent(targetLang)}&text=${encodeURIComponent(cleanText)}`;
+    const audio = new Audio(audioUrl);
+    currentAudioRef.current = audio;
+
+    audio.onended = () => {
+      isAISpeakingRef.current = false;
+      if (isMicActiveRef.current) startListeningLoop();
+    };
+
+    audio.onerror = (e) => {
+      console.warn('TTS audio playback error:', e);
+      isAISpeakingRef.current = false;
+      if (isMicActiveRef.current) startListeningLoop();
+    };
+
+    audio.play().catch(err => {
+      console.warn('Audio play notice (browser autoplay policy):', err);
+      isAISpeakingRef.current = false;
+      if (isMicActiveRef.current) startListeningLoop();
+    });
+  };
+
   const speakPrompt = (text: string, overrideLang?: string) => {
     if (typeof window === 'undefined' || !text) return;
 
@@ -720,10 +859,29 @@ export default function KioskPortal() {
     const targetLang = overrideLang || language || 'hi';
     const targetPack = LOCALIZED_LANGUAGES[targetLang] || LOCALIZED_LANGUAGES.hi;
 
-    // 1. Instant zero-latency native Web Speech Synthesis
+    // Clean text: if bilingual '/', extract primary native part for regional languages
+    let cleanText = text.trim();
+    if (cleanText.includes('/') && targetLang !== 'en') {
+      cleanText = cleanText.split('/')[0].trim();
+    }
+    cleanText = cleanText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+    cleanText = cleanText.replace(/[*_#`~]/g, '').trim();
+
+    // Check if browser actually has a native voice installed for this language
+    let hasNativeBrowserVoice = false;
     if ('speechSynthesis' in window) {
+      const voices = window.speechSynthesis.getVoices();
+      const langPrefix = targetPack.bcp47.split('-')[0].toLowerCase();
+      hasNativeBrowserVoice = voices.some(v => 
+        v.lang.toLowerCase().startsWith(langPrefix) || 
+        v.lang.toLowerCase() === targetPack.bcp47.toLowerCase()
+      );
+    }
+
+    // If browser actually has native voice installed (e.g. Hindi/English), use instant SpeechSynthesis
+    if (hasNativeBrowserVoice && 'speechSynthesis' in window) {
       try {
-        const utterance = new SpeechSynthesisUtterance(text);
+        const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = targetPack.bcp47;
         utterance.rate = 0.95;
         utterance.onend = () => {
@@ -731,36 +889,52 @@ export default function KioskPortal() {
           if (isMicActiveRef.current) startListeningLoop();
         };
         utterance.onerror = () => {
-          isAISpeakingRef.current = false;
-          if (isMicActiveRef.current) startListeningLoop();
+          playServerTTS(cleanText, targetLang);
         };
         window.speechSynthesis.speak(utterance);
         return;
       } catch (e) {
-        console.warn('SpeechSynthesis error, falling back:', e);
+        console.warn('SpeechSynthesis error, falling back to server TTS:', e);
       }
     }
 
-    // 2. Fallback Audio proxy
-    const audioUrl = `/api/tts?lang=${encodeURIComponent(targetLang)}&text=${encodeURIComponent(text)}`;
-    const audio = new Audio(audioUrl);
-    currentAudioRef.current = audio;
+    // Default & Fallback: High-fidelity Server TTS Stream
+    playServerTTS(cleanText, targetLang);
+  };
 
-    audio.onended = () => {
-      isAISpeakingRef.current = false;
-      if (isMicActiveRef.current) startListeningLoop();
-    };
+  // Voice Input for Patient Name
+  const handleVoiceInputForName = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice input not supported in this browser. Please type your name.');
+      return;
+    }
 
-    audio.onerror = () => {
-      isAISpeakingRef.current = false;
-      if (isMicActiveRef.current) startListeningLoop();
-    };
+    try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+      const rec = new SpeechRecognition();
+      rec.lang = currentLang.bcp47;
+      rec.continuous = false;
+      rec.interimResults = false;
+      setIsListeningForName(true);
 
-    audio.play().catch(err => {
-      console.warn('Audio play notice (auto-play policy):', err);
-      isAISpeakingRef.current = false;
-      if (isMicActiveRef.current) startListeningLoop();
-    });
+      rec.onresult = (event: any) => {
+        const transcript = event.results[0][0]?.transcript?.trim();
+        if (transcript) {
+          setPatientName(transcript);
+        }
+        setIsListeningForName(false);
+      };
+
+      rec.onerror = () => setIsListeningForName(false);
+      rec.onend = () => setIsListeningForName(false);
+      rec.start();
+    } catch (e) {
+      setIsListeningForName(false);
+    }
   };
 
   // Start / Resume Continuous Listening Loop in Native Locale
@@ -921,7 +1095,70 @@ export default function KioskPortal() {
       });
     }
     setStep('identify');
-    speakPrompt(currentLang.identify_prompt);
+    speakPrompt(currentLang.demographics_prompt || currentLang.identify_prompt);
+  };
+
+  // Start Consultation after Demographics Intake & Personalize Initial Question
+  const handleStartConsultation = async () => {
+    const cleanName = patientName.trim();
+    const effectiveName = cleanName || 'PATIENT_GUEST';
+    const effectiveAge = patientAge || '35';
+    const effectiveGender = patientGender || 'Male';
+
+    if (sessionId) {
+      fetch(`/api/session/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          queue_id: queueId,
+          abha_mock_id: abhaId || null,
+          patient_name: effectiveName,
+          age: effectiveAge,
+          gender: effectiveGender
+        })
+      }).catch(err => console.warn('Demographics sync error:', err));
+    }
+
+    let personalizedQ = currentLang.initial_q;
+    let personalizedEnQ = currentLang.initial_q;
+
+    if (cleanName) {
+      const honorific = currentLang.greeting_honorific ? ` ${currentLang.greeting_honorific}` : '';
+      if (language === 'hi') {
+        personalizedQ = `${cleanName}${honorific}, आज आप अस्पताल किस मुख्य बीमारी या तकलीफ के लिए आए हैं?`;
+      } else if (language === 'en') {
+        personalizedQ = `Hello ${cleanName}, what primary symptom or health complaint brings you to the clinic today?`;
+      } else if (language === 'ta') {
+        personalizedQ = `${cleanName} அவர்களே, இன்று நீங்கள் என்ன பிரதான உடல்நலப் பிரச்சனைக்காக மருத்துவமனைக்கு வந்துள்ளீர்கள்?`;
+      } else if (language === 'te') {
+        personalizedQ = `${cleanName} గారు, ఈ రోజు మీరు ఆసుపత్రికి ఏ ప్రధాన సమస్య కోసం వచ్చారు?`;
+      } else if (language === 'bn') {
+        personalizedQ = `${cleanName} বাবু, আজ আপনি প্রধানত কী শারীরিক সমস্যার জন্য এসেছেন?`;
+      } else if (language === 'mr') {
+        personalizedQ = `${cleanName} जी, आज तुम्ही दवाखान्यात कोणत्या मुख्य त्रासासाठी आला आहात?`;
+      } else if (language === 'gu') {
+        personalizedQ = `${cleanName} ભાઈ/બહેન, આજે તમે કઈ મુખ્ય તકલીફ માટે હૉસ્પિટલ આવ્યા છો?`;
+      } else if (language === 'pa') {
+        personalizedQ = `${cleanName} ਜੀ, ਅੱਜ ਤੁਸੀਂ ਹਸਪਤਾਲ ਕਿਸ ਮੁੱਖ ਤਕਲੀਫ਼ ਲਈ ਆਏ ਹੋ?`;
+      } else if (language === 'kn') {
+        personalizedQ = `${cleanName} ಅವರೇ, ಇಂದು ನೀವು ಆಸ್ಪತ್ರೆಗೆ ಯಾವ ಮುಖ್ಯ ಆರೋಗ್ಯ ಸಮಸ್ಯೆಯಿಂದ ಬಂದಿದ್ದೀರಿ?`;
+      } else if (language === 'ml') {
+        personalizedQ = `${cleanName}, ഇന്ന് നിങ്ങൾ എന്തൊക്കെ പ്രധാന അസുਖങ്ങൾക്കാണ് ആശുപത്രിയിൽ എത്തിയത്?`;
+      }
+      personalizedEnQ = `Hello ${cleanName}, what primary symptom or health complaint brings you to the clinic today?`;
+    }
+
+    setCurrentQuestion({
+      id: 'q_chief_complaint',
+      question_localized: personalizedQ,
+      question_en: personalizedEnQ,
+      section: 'chief_complaint',
+      field_name: 'chief_complaint',
+      options: currentLang.initial_options
+    });
+
+    setStep('interview');
+    speakPrompt(personalizedQ);
   };
 
   // Record Interview Turn with Dynamic Follow-Up AI
@@ -1215,55 +1452,141 @@ export default function KioskPortal() {
         </div>
       )}
 
-      {/* STEP 3: IDENTIFY (FULLY LOCALIZED) */}
+      {/* STEP 3: DEMOGRAPHICS & IDENTIFICATION (FULLY LOCALIZED VOICE + TOUCH) */}
       {step === 'identify' && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm my-auto">
-          <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">{currentLang.identify_title}</h2>
-          <p className="text-slate-600 text-sm mb-6">{currentLang.identify_subtitle}</p>
+        <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm my-auto max-w-4xl mx-auto w-full">
+          <div className="text-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-[#EAF3F2] text-[#2F5D62] flex items-center justify-center mx-auto mb-3">
+              <User className="w-7 h-7" />
+            </div>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-[#1A1A1A] mb-1">{currentLang.identify_title}</h2>
+            <p className="text-slate-600 text-sm">{currentLang.identify_subtitle}</p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="border-2 border-dashed border-teal-800/30 rounded-2xl p-6 text-center bg-[#EAF3F2]/50 flex flex-col items-center justify-center">
-              <Camera className="w-12 h-12 text-[#2F5D62] mb-3" />
-              <span className="font-bold text-slate-800 text-sm">{currentLang.scan_qr_title}</span>
-              <span className="text-xs text-slate-500 mt-1">{currentLang.scan_qr_desc}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            {/* 1. Full Name Input with Live Voice Speaking Option */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62] flex items-center gap-1.5">
+                  <User className="w-4 h-4" />
+                  <span>{currentLang.name_label}</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleVoiceInputForName}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    isListeningForName 
+                      ? 'bg-red-600 text-white animate-pulse shadow-md' 
+                      : 'bg-[#2F5D62] text-white hover:bg-teal-800'
+                  }`}
+                  title="Speak Name"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span>{isListeningForName ? 'सुन रहे हैं... (Listening)' : currentLang.speak_name_btn}</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder={currentLang.name_placeholder || 'Enter Full Name'}
+                value={patientName}
+                onChange={e => setPatientName(e.target.value)}
+                className="w-full p-3.5 border-2 border-slate-200 focus:border-[#2F5D62] bg-white rounded-xl text-base font-bold text-slate-900 outline-none transition-all"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                बोलकर या लिखकर अपना नाम दर्ज करें (Type or tap mic to speak)
+              </span>
             </div>
 
-            <div className="flex flex-col justify-center space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">{currentLang.queue_id_label}</label>
-                <input 
-                  type="text" 
-                  value={queueId} 
-                  onChange={e => setQueueId(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-xl text-lg font-bold text-[#2F5D62]" 
+            {/* 2. Age Input & Quick Select Chips */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-2">
+                {currentLang.age_label}
+              </label>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  placeholder="35"
+                  value={patientAge}
+                  onChange={e => setPatientAge(e.target.value)}
+                  className="w-24 p-3 border-2 border-slate-200 focus:border-[#2F5D62] bg-white rounded-xl text-center text-lg font-bold text-slate-900 outline-none"
                 />
+                <div className="grid grid-cols-4 gap-1.5 flex-1">
+                  {['18-25', '26-40', '41-60', '60+'].map(bracket => (
+                    <button
+                      key={bracket}
+                      type="button"
+                      onClick={() => {
+                        const mid = bracket === '18-25' ? '22' : bracket === '26-40' ? '33' : bracket === '41-60' ? '50' : '65';
+                        setPatientAge(mid);
+                      }}
+                      className="px-2 py-2.5 rounded-xl border text-xs font-bold bg-white text-slate-700 hover:border-[#2F5D62] hover:bg-[#EAF3F2] transition-all"
+                    >
+                      {bracket}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">{currentLang.abha_id_label}</label>
-                <input 
-                  type="text" 
-                  placeholder="91-1234-5678-9012"
-                  value={abhaId} 
-                  onChange={e => setAbhaId(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-xl text-sm" 
-                />
+              <span className="text-[11px] text-slate-500 block">
+                आयु वर्ष में दर्ज करें (Age in years)
+              </span>
+            </div>
+
+            {/* 3. Gender Selection */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-2">
+                {currentLang.gender_label}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'Male', label: currentLang.male_opt },
+                  { key: 'Female', label: currentLang.female_opt },
+                  { key: 'Other', label: currentLang.other_opt }
+                ].map(item => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setPatientGender(item.key)}
+                    className={`py-3 px-2 rounded-xl text-xs md:text-sm font-bold border-2 transition-all text-center ${
+                      patientGender === item.key
+                        ? 'border-[#2F5D62] bg-[#2F5D62] text-white shadow-md'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
+            </div>
+
+            {/* 4. Queue Token & ABHA (Optional) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62]">
+                  {currentLang.queue_id_label}
+                </label>
+                <span className="text-xs bg-[#EAF3F2] text-[#2F5D62] px-2.5 py-0.5 rounded-full font-bold">
+                  {queueId}
+                </span>
+              </div>
+              <input
+                type="text"
+                placeholder={currentLang.abha_id_label || 'ABHA ID: 91-1234-5678-9012 (Optional)'}
+                value={abhaId}
+                onChange={e => setAbhaId(e.target.value)}
+                className="w-full p-3 border-2 border-slate-200 focus:border-[#2F5D62] bg-white rounded-xl text-xs font-semibold text-slate-800 outline-none"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                आभा आईडी वैकल्पिक है (ABHA ID is optional)
+              </span>
             </div>
           </div>
 
           <button
-            onClick={() => {
-              if (sessionId) {
-                fetch(`/api/session/${sessionId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ queue_id: queueId, abha_mock_id: abhaId || null })
-                }).catch(err => console.warn('Identity sync warning:', err));
-              }
-              setStep('interview');
-              speakPrompt(currentQuestion.question_localized || currentQuestion.question_en);
-            }}
-            className="touch-target w-full bg-[#2F5D62] text-white hover:bg-teal-800 rounded-2xl p-4 font-bold text-lg flex items-center justify-center gap-2 shadow-md"
+            type="button"
+            onClick={handleStartConsultation}
+            className="touch-target w-full bg-[#2F5D62] text-white hover:bg-teal-800 rounded-2xl p-4 font-extrabold text-lg flex items-center justify-center gap-2 shadow-lg transition-all transform active:scale-[0.99]"
           >
             <span>{currentLang.start_interview_btn}</span>
             <ChevronRight className="w-6 h-6" />
