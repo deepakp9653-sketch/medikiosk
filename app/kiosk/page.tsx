@@ -1148,13 +1148,23 @@ export default function KioskPortal() {
       personalizedEnQ = `Hello ${cleanName}, what primary symptom or health complaint brings you to the clinic today?`;
     }
 
+    const isAyurveda = clinicalMode === 'ayurveda';
+    const ayushInitialOptions = [
+      'वात दोष / Gas, joint pain, dryness (Vata)',
+      'पित्त दोष / Acidity, heartburn, burning (Pitta)',
+      'कफ दोष / Cough, heaviness, congestion (Kapha)',
+      'अग्नि व पाचन समस्या / Indigestion & slow appetite (Agni)',
+      'पुरानी बीमारी व एलर्जी / Chronic disease & allergies',
+      'अन्य स्वास्थ्य समस्या / Other health complaint'
+    ];
+
     setCurrentQuestion({
       id: 'q_chief_complaint',
       question_localized: personalizedQ,
       question_en: personalizedEnQ,
-      section: 'chief_complaint',
+      section: isAyurveda ? 'ayush_chief_complaint' : 'chief_complaint',
       field_name: 'chief_complaint',
-      options: currentLang.initial_options
+      options: isAyurveda ? ayushInitialOptions : currentLang.initial_options
     });
 
     setStep('interview');

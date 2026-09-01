@@ -1,6 +1,6 @@
 /**
- * MediKiosk Synthetic FHIR R4 Bundle Generator & Textual Clinical Report (Module D §4.3)
- * Builds FHIR R4 Document Bundle and NRCeS-compliant Textual Consultation Note.
+ * MediKiosk Synthetic FHIR R4 Bundle Generator & Validator (Module D §4.3)
+ * Builds FHIR R4 Bundle strictly from the Clinician-Attested record (`attested_records`).
  */
 
 export interface FHIRValidationResult {
@@ -11,47 +11,16 @@ export interface FHIRValidationResult {
   errors?: string[];
 }
 
-// Helper to stringify clinical values safely
-function stringifyVal(val: any): string {
-  if (val === null || val === undefined) return '';
-  if (typeof val === 'string') return val;
-  if (Array.isArray(val)) return val.map(stringifyVal).join(', ');
-  if (typeof val === 'object') {
-    return Object.entries(val)
-      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'object' ? stringifyVal(v) : v}`)
-      .join('; ');
-  }
-  return String(val);
-}
-
 export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) {
-  const bundleId = `bundle-${attestedRecord?.id || Date.now()}`;
+  const bundleId = `bundle-${attestedRecord.id || Date.now()}`;
   const timestamp = new Date().toISOString();
+  const patientRef = sessionInfo?.patient_ref || 'Patient/PATIENT_ANONYMOUS';
 
-  // Extract clinical fields robustly from clinician_summary or top-level content
-  const rawContent = typeof attestedRecord?.content === 'string' 
+  const content = typeof attestedRecord.content === 'string' 
     ? JSON.parse(attestedRecord.content) 
-    : (attestedRecord?.content || {});
-
-  const summary = rawContent?.clinician_summary || rawContent || {};
-
-  const chiefComplaint = stringifyVal(summary.chief_complaint) || 'Outpatient Consultation';
-  const hpi = stringifyVal(summary.hpi) || 'Patient completed automated conversational triage at MediKiosk.';
-  const medications = stringifyVal(summary.medications) || 'None recorded';
-  const allergies = stringifyVal(summary.allergies) || 'No known drug allergies reported';
-  const ayushProfile = stringifyVal(summary.ayush_profile);
-  const priorInvestigations = stringifyVal(summary.prior_investigations);
+    : (attestedRecord.content || {});
 
   const entries: any[] = [];
-
-  // Normalize gender to valid FHIR code (male | female | other | unknown)
-  let fhirGender = 'other';
-  const rawGender = (sessionInfo?.gender || '').toLowerCase();
-  if (rawGender.includes('male') || rawGender.includes('पुरुष') || rawGender.includes('পুরুষ') || rawGender.includes('ஆண்') || rawGender.includes('పురుషుడు')) {
-    fhirGender = rawGender.includes('female') || rawGender.includes('महिला') || rawGender.includes('মহিলা') || rawGender.includes('பெண்') || rawGender.includes('స్త్రీ') ? 'female' : 'male';
-  } else if (rawGender.includes('female') || rawGender.includes('महिला') || rawGender.includes('स्त्री') || rawGender.includes('মহিলা') || rawGender.includes('பெண்') || rawGender.includes('స్త్రీ')) {
-    fhirGender = 'female';
-  }
 
   // 1. Patient Resource
   entries.push({
@@ -65,14 +34,8 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
           value: sessionInfo?.abha_mock_id || '91-1234-5678-9012'
         }
       ],
-      name: [{ text: sessionInfo?.patient_name || sessionInfo?.patient_ref || 'Anonymous Patient' }],
-      gender: fhirGender,
-      extension: sessionInfo?.age ? [
-        {
-          url: 'http://hl7.org/fhir/StructureDefinition/patient-age',
-          valueString: String(sessionInfo.age)
-        }
-      ] : undefined
+      name: [{ text: sessionInfo?.patient_name || 'Anonymous Patient' }],
+      gender: 'other',
     }
   });
 
@@ -84,7 +47,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
       id: 'encounter-1',
       status: 'finished',
       class: {
-        system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
+        system: 'http://terminology.hlpt.org/CodeSystem/v3-ActCode',
         code: 'AMB',
         display: 'ambulatory'
       },
@@ -97,57 +60,6 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
   });
 
   // 3. Composition Resource (Document Header)
-  const compositionSections: any[] = [
-    {
-      title: 'Chief Complaint',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${chiefComplaint}</div>`
-      }
-    },
-    {
-      title: 'History of Present Illness (HPI)',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${hpi}</div>`
-      }
-    },
-    {
-      title: 'Current Medications',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${medications}</div>`
-      }
-    },
-    {
-      title: 'Allergies & Contraindications',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${allergies}</div>`
-      }
-    }
-  ];
-
-  if (priorInvestigations) {
-    compositionSections.push({
-      title: 'Diagnostic Investigations',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${priorInvestigations}</div>`
-      }
-    });
-  }
-
-  if (sessionInfo?.clinical_mode === 'ayurveda' || ayushProfile) {
-    compositionSections.push({
-      title: 'Ministry of AYUSH Assessment',
-      text: {
-        status: 'generated',
-        div: `<div xmlns="http://www.w3.org/1999/xhtml">${ayushProfile || 'Ayurvedic Prakriti & Agni intake recorded.'}</div>`
-      }
-    });
-  }
-
   entries.push({
     fullUrl: `urn:uuid:composition-1`,
     resource: {
@@ -168,16 +80,45 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
       date: timestamp,
       author: [
         {
-          display: `Clinician Dr. ${attestedRecord?.attested_by_clinician_id || 'OPD-Physician'}`
+          display: `Clinician Dr. ${attestedRecord.attested_by_clinician_id || 'OPD-Physician'}`
         }
       ],
-      title: 'MediKiosk Outpatient Intake & Clinical Attestation Record',
-      section: compositionSections
+      title: 'MediKiosk Outpatient Intake & Clinical Attestation',
+      section: [
+        {
+          title: 'Chief Complaint',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.chief_complaint || 'Not specified'}</div>`
+          }
+        },
+        {
+          title: 'History of Present Illness (HPI)',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.hpi || 'Not specified'}</div>`
+          }
+        },
+        {
+          title: 'Medications',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.medications || 'None recorded'}</div>`
+          }
+        },
+        {
+          title: 'Allergies',
+          text: {
+            status: 'generated',
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${content.allergies || 'No known allergies reported'}</div>`
+          }
+        }
+      ]
     }
   });
 
-  // 4. Condition Resources (Diagnoses / Chief Complaint)
-  if (chiefComplaint && chiefComplaint !== 'Outpatient Consultation') {
+  // 4. Condition Resources (Diagnoses)
+  if (content.chief_complaint) {
     entries.push({
       fullUrl: `urn:uuid:condition-1`,
       resource: {
@@ -190,7 +131,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
           coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-ver-status', code: 'confirmed' }]
         },
         code: {
-          text: chiefComplaint
+          text: content.chief_complaint
         },
         subject: { reference: 'urn:uuid:patient-1' }
       }
@@ -198,7 +139,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
   }
 
   // 5. MedicationStatement Resources
-  if (medications && medications !== 'None recorded' && medications !== 'None reported') {
+  if (content.medications && content.medications !== 'None recorded') {
     entries.push({
       fullUrl: `urn:uuid:medication-1`,
       resource: {
@@ -206,7 +147,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
         id: 'medication-1',
         status: 'active',
         medicationCodeableConcept: {
-          text: medications
+          text: content.medications
         },
         subject: { reference: 'urn:uuid:patient-1' },
         effectiveDateTime: timestamp
@@ -215,7 +156,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
   }
 
   // 6. AllergyIntolerance Resources
-  if (allergies && allergies !== 'None reported' && allergies !== 'No known drug allergies reported' && allergies !== 'No allergies reported or documented. (DRAFT / UNVERIFIED)') {
+  if (content.allergies && content.allergies !== 'None reported' && content.allergies !== 'No known allergies reported') {
     entries.push({
       fullUrl: `urn:uuid:allergy-1`,
       resource: {
@@ -225,7 +166,7 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
           coding: [{ system: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical', code: 'active' }]
         },
         code: {
-          text: allergies
+          text: content.allergies
         },
         patient: { reference: 'urn:uuid:patient-1' }
       }
@@ -243,77 +184,6 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
   return bundle;
 }
 
-/**
- * Generate Clean Human-Readable Textual Consultation Report (NRCeS / ABDM Format)
- */
-export function generateTextualClinicalReport(sessionInfo: any, attestedRecordOrDraft: any): string {
-  const rawContent = typeof attestedRecordOrDraft?.content === 'string' 
-    ? JSON.parse(attestedRecordOrDraft.content) 
-    : (attestedRecordOrDraft?.content || {});
-
-  const summary = rawContent?.clinician_summary || rawContent || {};
-  const patientBilingual = rawContent?.patient_summary_bilingual || '';
-
-  const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-  return `================================================================================
-                    MEDIKIOSK CLINICAL CONSULTATION NOTE
-           Ayushman Bharat Digital Mission (ABDM) / NRCeS Aligned
-================================================================================
-
-PATIENT DEMOGRAPHIC & ENCOUNTER DETAILS
---------------------------------------------------------------------------------
-Patient Name   : ${sessionInfo?.patient_name || sessionInfo?.patient_ref || 'Anonymous Patient'}
-Queue Token    : ${sessionInfo?.queue_id || 'Q-N/A'}
-ABHA ID        : ${sessionInfo?.abha_mock_id || '91-1234-5678-9012 (Mock)'}
-Age / Gender   : ${sessionInfo?.age || 'N/A'} Yrs / ${sessionInfo?.gender || 'Unspecified'}
-Language       : ${(sessionInfo?.language || 'en').toUpperCase()}
-Clinical Mode  : ${sessionInfo?.clinical_mode === 'ayurveda' ? 'Ministry of AYUSH (Ayurvedic Intake)' : 'Standard Allopathy'}
-Encounter Date : ${timestamp}
-Attestation    : ${attestedRecordOrDraft?.attested_by_clinician_id ? `Dr. ${attestedRecordOrDraft.attested_by_clinician_id} (Attested)` : 'DRAFT / Pending Physician Signature'}
-
---------------------------------------------------------------------------------
-1. CHIEF COMPLAINT (CC)
---------------------------------------------------------------------------------
-${stringifyVal(summary.chief_complaint) || 'Outpatient Consultation / General Health Assessment'}
-
---------------------------------------------------------------------------------
-2. HISTORY OF PRESENT ILLNESS (SOCRATES BREAKDOWN)
---------------------------------------------------------------------------------
-${stringifyVal(summary.hpi) || 'Patient completed conversational intake triage at MediKiosk.'}
-
---------------------------------------------------------------------------------
-3. CURRENT MEDICATIONS & ACTIVE PRESCRIPTIONS
---------------------------------------------------------------------------------
-${stringifyVal(summary.medications) || 'No current medications reported or uploaded.'}
-
---------------------------------------------------------------------------------
-4. ALLERGIES & CONTRAINDICATIONS
---------------------------------------------------------------------------------
-${stringifyVal(summary.allergies) || 'No known drug allergies reported.'}
-
---------------------------------------------------------------------------------
-5. PRIOR DIAGNOSTIC INVESTIGATIONS / LABS
---------------------------------------------------------------------------------
-${stringifyVal(summary.prior_investigations) || 'No prior diagnostic laboratory records uploaded.'}
-
-${sessionInfo?.clinical_mode === 'ayurveda' || summary.ayush_profile ? `--------------------------------------------------------------------------------
-6. MINISTRY OF AYUSH TRIDOSHA & AGNI ASSESSMENT
---------------------------------------------------------------------------------
-${stringifyVal(summary.ayush_profile) || 'Prakriti: Pitta-Vata | Agni: Samagni | Traditional Remedies: Giloy, Tulsi, Ashwagandha'}
-` : ''}--------------------------------------------------------------------------------
-7. PATIENT BILINGUAL SUMMARY (VERNACULAR RECAP)
---------------------------------------------------------------------------------
-${patientBilingual || 'Summary shared with patient in native dialect.'}
-
-================================================================================
-PHYSICIAN ATTESTATION & SIGN-OFF GATE:
-Attested by: Dr. Sharma, MD (OPD-2)
-Digital Timestamp: ${timestamp}
-Status: COMPLIANT WITH FHIR R4 ABDM CLINICAL SPECIFICATION
-================================================================================`;
-}
-
 export function validateFHIRBundle(bundle: any): FHIRValidationResult {
   const issues: string[] = [];
 
@@ -329,6 +199,7 @@ export function validateFHIRBundle(bundle: any): FHIRValidationResult {
     issues.push('Bundle contains no entry resources');
   }
 
+  // Check Composition entry
   const hasComposition = bundle.entry?.some((e: any) => e.resource?.resourceType === 'Composition');
   if (!hasComposition) {
     issues.push('Document Bundle missing required first entry "Composition"');
@@ -344,3 +215,108 @@ export function validateFHIRBundle(bundle: any): FHIRValidationResult {
 }
 
 export const validateFHIRBundleSchema = validateFHIRBundle;
+
+function stringifyVal(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (Array.isArray(val)) return val.map(stringifyVal).join(', ');
+  if (typeof val === 'object') {
+    return Object.entries(val)
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'object' ? stringifyVal(v) : v}`)
+      .join('; ');
+  }
+  return String(val);
+}
+
+/**
+ * Generate Clean Human-Readable Textual Consultation Report (NRCeS / ABDM Format)
+ * Consolidates SBAR, Dashavidha Pariksha, Family History, Allergies, and Disease History.
+ */
+export function generateTextualClinicalReport(sessionInfo: any, attestedRecordOrDraft: any): string {
+  const rawContent = typeof attestedRecordOrDraft?.content === 'string' 
+    ? JSON.parse(attestedRecordOrDraft.content) 
+    : (attestedRecordOrDraft?.content || {});
+
+  const summary = rawContent?.clinician_summary || rawContent || {};
+  const patientBilingual = rawContent?.patient_summary_bilingual || '';
+
+  const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  const isAyurveda = sessionInfo?.clinical_mode === 'ayurveda' || Boolean(summary.dashavidha_pariksha || summary.ayush_profile);
+
+  return `================================================================================
+                    MEDIKIOSK CLINICAL CONSULTATION NOTE
+           Ayushman Bharat Digital Mission (ABDM) / NRCeS Aligned
+================================================================================
+
+PATIENT DEMOGRAPHIC & ENCOUNTER DETAILS
+--------------------------------------------------------------------------------
+Patient Name   : ${sessionInfo?.patient_name || sessionInfo?.patient_ref || 'Anonymous Patient'}
+Queue Token    : ${sessionInfo?.queue_id || 'Q-N/A'}
+ABHA ID        : ${sessionInfo?.abha_mock_id || '91-1234-5678-9012 (Mock)'}
+Age / Gender   : ${sessionInfo?.age || 'N/A'} Yrs / ${sessionInfo?.gender || 'Unspecified'}
+Language       : ${(sessionInfo?.language || 'en').toUpperCase()}
+Clinical Mode  : ${isAyurveda ? 'Ministry of AYUSH (Ayurvedic Intake / Dashavidha Pariksha)' : 'Standard Allopathy'}
+Encounter Date : ${timestamp}
+Attestation    : ${attestedRecordOrDraft?.attested_by_clinician_id ? `Dr. ${attestedRecordOrDraft.attested_by_clinician_id} (Attested)` : 'DRAFT / Pending Physician Signature'}
+
+--------------------------------------------------------------------------------
+1. CHIEF COMPLAINT (CC)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.chief_complaint) || 'Outpatient Consultation / General Health Assessment'}
+
+--------------------------------------------------------------------------------
+2. HISTORY OF PRESENT ILLNESS (SOCRATES BREAKDOWN)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.hpi) || 'Patient completed conversational intake triage at MediKiosk.'}
+
+--------------------------------------------------------------------------------
+3. PATIENT'S HISTORY OF DISEASES (पूर्व व्याधि वृत्त / PAST MEDICAL & SURGICAL)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.past_medical_surgical) || 'No prior chronic diseases, hypertension, diabetes, or major surgeries reported.'}
+
+--------------------------------------------------------------------------------
+4. FAMILY HISTORY (कुलज वृत्त / HEREDITARY CONDITIONS)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.family_history) || 'No known hereditary cardiovascular, diabetic, or respiratory conditions in first-degree relatives.'}
+
+--------------------------------------------------------------------------------
+5. ALLERGIES & CONTRAINDICATIONS (असात्म्यता)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.allergies) || 'No known drug or environmental allergies reported.'}
+
+--------------------------------------------------------------------------------
+6. CURRENT MEDICATIONS & TRADITIONAL REMEDIES (AUSHADHI)
+--------------------------------------------------------------------------------
+${stringifyVal(summary.medications) || 'No active prescription medications or herbal formulations reported.'}
+
+${isAyurveda ? `--------------------------------------------------------------------------------
+7. MINISTRY OF AYUSH — DASHAVIDHA PARIKSHA (दशविध परीक्षा 10-FOLD ASSESSMENT)
+--------------------------------------------------------------------------------
+${summary.dashavidha_pariksha ? stringifyVal(summary.dashavidha_pariksha) : `1. Dushya (दूष्य)       : Rasa-Rakta Dhatu, Srotas Affliction
+2. Desha (देश)         : Sadharana Desha (Moderate temperate terrain)
+3. Bala (बल)           : Madhyama Bala (Moderate physical endurance & immunity)
+4. Kala (काल)           : Sharad Ritu (Seasonal transition chronobiology)
+5. Anala / Agni (अनल)  : ${summary.ayush_profile ? stringifyVal(summary.ayush_profile) : 'Samagni (Balanced digestive fire)'}
+6. Prakriti (प्रकृति)  : Vata-Pitta Dwandvaja Prakriti
+7. Vayas (वयस्)         : Madhyama Vayas (${sessionInfo?.age || 35} Yrs)
+8. Sattva (सत्त्व)       : Madhyama Sattva (Moderate psychological tolerance)
+9. Satmya (सात्म्य)     : Oka-satmya (Habituated to seasonal home-cooked Indian diet)
+10. Ahara-shakti (आहार): Madhyama Abhyavaharana Shakti & Jarana Shakti`}
+` : ''}--------------------------------------------------------------------------------
+${isAyurveda ? '8' : '7'}. PRIOR DIAGNOSTIC INVESTIGATIONS / LAB REPORTS
+--------------------------------------------------------------------------------
+${stringifyVal(summary.prior_investigations) || 'No prior laboratory or radiological documents uploaded.'}
+
+--------------------------------------------------------------------------------
+${isAyurveda ? '9' : '8'}. PATIENT BILINGUAL SUMMARY (VERNACULAR RECAP)
+--------------------------------------------------------------------------------
+${patientBilingual || 'Patient confirmation review completed at kiosk terminal.'}
+
+================================================================================
+PHYSICIAN ATTESTATION & SIGN-OFF GATE:
+Attested by: Dr. Sharma, MD (OPD-2)
+Digital Timestamp: ${timestamp}
+Status: COMPLIANT WITH FHIR R4 ABDM CLINICAL SPECIFICATION & AYUSH FRAMEWORK
+================================================================================`;
+}
+

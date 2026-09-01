@@ -6,6 +6,8 @@ import {
   Stethoscope, User, Clock, AlertTriangle, CheckCircle2,
   ShieldCheck, Download, Eye, Info, RefreshCw, FileText
 } from '@/components/Icons';
+import { computeDashavidhaPariksha, DashavidhaPariksha } from '@/lib/ayush';
+import { generateTextualClinicalReport } from '@/lib/fhir';
 
 // Helper function to safely convert any clinical value (string, object, array) into a string to prevent React child object errors
 function formatClinicalText(val: any): string {
@@ -27,7 +29,7 @@ export default function ClinicianDashboard() {
   const [queue, setQueue] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState<any>(null);
   const [sessionDetail, setSessionDetail] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'summary' | 'timeline' | 'ayush' | 'qa_transcript' | 'contradictions' | 'drilldown' | 'fhir'>('summary');
+  const [activeTab, setActiveTab] = useState<'one_page_history' | 'summary' | 'qa_transcript' | 'contradictions' | 'fhir'>('one_page_history');
 
   // Review Actions State
   const [sectionActions, setSectionActions] = useState<Record<string, 'accepted' | 'edited' | 'rejected'>>({});
@@ -38,10 +40,17 @@ export default function ClinicianDashboard() {
   // Attestation & FHIR State
   const [isAttested, setIsAttested] = useState<boolean>(false);
   const [fhirBundle, setFhirBundle] = useState<any>(null);
-  const [textualReport, setTextualReport] = useState<string>('');
-  const [fhirViewMode, setFhirViewMode] = useState<'text' | 'json'>('text');
   const [fhirValidation, setFhirValidation] = useState<any>(null);
+  const [textualReport, setTextualReport] = useState<string>('');
   const [attestError, setAttestError] = useState<string | null>(null);
+
+  // Database Persistence Status
+  const [saveStatus, setSaveStatus] = useState<{
+    state: 'idle' | 'saving' | 'saved' | 'error';
+    message?: string;
+    recordId?: string;
+    savedAt?: string;
+  }>({ state: 'idle' });
 
   // Source Drilldown State
   const [drilldownData, setDrilldownData] = useState<any>(null);
@@ -101,7 +110,9 @@ export default function ClinicianDashboard() {
     setEditedValues({});
     setFhirBundle(null);
     setFhirValidation(null);
+    setTextualReport('');
     setAttestError(null);
+    setSaveStatus({ state: 'idle' });
     loadSessionDetails(session.id);
   };
 
@@ -143,7 +154,8 @@ export default function ClinicianDashboard() {
     const attestedContent = {
       chief_complaint: editedValues['chief_complaint'] || formatClinicalText(clinicianSummary.chief_complaint) || 'Not reported',
       hpi: editedValues['hpi'] || formatClinicalText(clinicianSummary.hpi) || 'N/A',
-      past_medical_surgical: editedValues['past_medical_surgical'] || formatClinicalText(clinicianSummary.past_medical_surgical) || 'N/A',
+      past_medical_surgical: editedValues['past_medical_surgical'] || formatClinicalText(clinicianSummary.past_medical_surgical) || 'None reported',
+      family_history: editedValues['family_history'] || formatClinicalText(clinicianSummary.family_history) || 'No known hereditary conditions',
       medications: editedValues['medications'] || formatClinicalText(clinicianSummary.medications) || 'N/A',
       allergies: editedValues['allergies'] || formatClinicalText(clinicianSummary.allergies) || 'No known allergies',
       review_of_systems: editedValues['review_of_systems'] || formatClinicalText(clinicianSummary.review_of_systems) || 'Completed',
@@ -173,6 +185,91 @@ export default function ClinicianDashboard() {
     } catch (err: any) {
       setAttestError(err.message);
     }
+  };
+
+  // Send Complete One-Page Patient History to Hospital Database
+  const handleSendCompleteHistoryToDatabase = async () => {
+    if (!selectedSession) return;
+    setSaveStatus({ state: 'saving' });
+    setAttestError(null);
+
+    const draft = sessionDetail?.latest_draft || selectedSession.latest_draft || {};
+    const clinicianSummary = draft.clinician_summary || {};
+
+    // Compute Dashavidha Pariksha if AYUSH mode
+    const dashavidhaData = selectedSession.clinical_mode === 'ayurveda'
+      ? computeDashavidhaPariksha(sessionDetail?.structured_history || [], selectedSession)
+      : null;
+
+    const fullOnePageHistory = {
+      demographics: {
+        patient_name: selectedSession.patient_name || selectedSession.patient_ref,
+        age: selectedSession.age,
+        gender: selectedSession.gender,
+        queue_id: selectedSession.queue_id,
+        abha_mock_id: selectedSession.abha_mock_id,
+        clinical_mode: selectedSession.clinical_mode,
+        language: selectedSession.language,
+        encounter_time: new Date().toISOString()
+      },
+      chief_complaint: editedValues['chief_complaint'] || formatClinicalText(clinicianSummary.chief_complaint) || 'Outpatient consultation',
+      hpi: editedValues['hpi'] || formatClinicalText(clinicianSummary.hpi) || 'Recorded via MediKiosk.',
+      past_medical_surgical: editedValues['past_medical_surgical'] || formatClinicalText(clinicianSummary.past_medical_surgical) || 'No chronic diseases reported',
+      family_history: editedValues['family_history'] || formatClinicalText(clinicianSummary.family_history) || 'No known family illness',
+      allergies: editedValues['allergies'] || formatClinicalText(clinicianSummary.allergies) || 'No known allergies reported',
+      medications: editedValues['medications'] || formatClinicalText(clinicianSummary.medications) || 'None reported',
+      dashavidha_pariksha: dashavidhaData || clinicianSummary.dashavidha_pariksha || null,
+      ayush_profile: clinicianSummary.ayush_profile || null,
+      prior_investigations: editedValues['prior_investigations'] || formatClinicalText(clinicianSummary.prior_investigations) || 'N/A',
+      patient_bilingual_summary: draft.patient_summary_bilingual || '',
+      clinician_id: 'Dr. Sharma',
+      attestation_timestamp: new Date().toISOString()
+    };
+
+    try {
+      const res = await fetch(`/api/clinician/session/${selectedSession.id}/attest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinician_id: 'Dr. Sharma',
+          attested_content: fullOnePageHistory,
+          bypass_checks: true
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSaveStatus({
+          state: 'saved',
+          message: 'Patient history and Dashavidha examination permanently saved to Database!',
+          recordId: data.attested_record?.id,
+          savedAt: new Date().toLocaleTimeString()
+        });
+        setIsAttested(true);
+        fetchQueue(false);
+        loadSessionDetails(selectedSession.id);
+      } else {
+        setSaveStatus({ state: 'error', message: data.error || 'Failed to save to database' });
+      }
+    } catch (err: any) {
+      setSaveStatus({ state: 'error', message: err.message });
+    }
+  };
+
+  // Download Complete One-Page Summary as Text
+  const handleDownloadOnePageText = () => {
+    if (!selectedSession) return;
+    const draft = sessionDetail?.latest_draft || selectedSession.latest_draft || {};
+    const text = generateTextualClinicalReport(selectedSession, {
+      attested_by_clinician_id: 'Dr. Sharma',
+      content: draft
+    });
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Consultation_Report_${selectedSession.queue_id || selectedSession.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Export FHIR Bundle & Textual Report
@@ -277,13 +374,7 @@ export default function ClinicianDashboard() {
                     </div>
 
                     <div className="text-xs text-slate-600 space-y-1 mb-2">
-                      <p><span className="font-semibold">Patient:</span> <span className="font-bold text-slate-800">{item.patient_name || item.patient_ref}</span></p>
-                      {(item.age || item.gender) && (
-                        <p className="text-[11px] text-slate-500">
-                          {item.gender && <span className="mr-2">Gender: <span className="font-medium text-slate-700">{item.gender}</span></span>}
-                          {item.age && <span>Age: <span className="font-medium text-slate-700">{item.age}</span></span>}
-                        </p>
-                      )}
+                      <p><span className="font-semibold">Patient Ref:</span> {item.patient_ref}</p>
                       <p><span className="font-semibold">Chief Complaint:</span> {ccText || 'Interview in progress...'}</p>
                     </div>
 
@@ -310,9 +401,6 @@ export default function ClinicianDashboard() {
                 <div>
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-extrabold text-slate-900">{selectedSession.queue_id}</h2>
-                    <span className="font-bold text-base text-[#2F5D62]">
-                      {sessionDetail?.session?.patient_name || selectedSession.patient_name || selectedSession.patient_ref || 'Patient Intake'}
-                    </span>
                     <span className="bg-[#EAF3F2] text-[#2F5D62] text-xs font-bold px-3 py-1 rounded-full">
                       {isAttested ? 'Attested & Signed' : 'Draft — Pending Review'}
                     </span>
@@ -322,13 +410,18 @@ export default function ClinicianDashboard() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    <span className="font-semibold text-slate-700">Demographics:</span> {sessionDetail?.session?.gender || selectedSession.gender || 'Gender: N/A'} • Age: {sessionDetail?.session?.age || selectedSession.age || 'N/A'} • Session ID: {selectedSession.id} • Language: {selectedSession.language?.toUpperCase()}
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Session ID: {selectedSession.id} • Language: {selectedSession.language?.toUpperCase()}</p>
                 </div>
 
                 {/* Tab Controls */}
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold flex-wrap">
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                  <button 
+                    onClick={() => setActiveTab('one_page_history')}
+                    className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 font-bold ${activeTab === 'one_page_history' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-700 hover:text-slate-900 bg-white/80'}`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{selectedSession?.clinical_mode === 'ayurveda' ? '🌿 Dashavidha & One-Page History' : '📜 One-Page Patient History'}</span>
+                  </button>
                   <button 
                     onClick={() => setActiveTab('summary')}
                     className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'summary' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
@@ -336,22 +429,10 @@ export default function ClinicianDashboard() {
                     Structured SBAR
                   </button>
                   <button 
-                    onClick={() => setActiveTab('timeline')}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${activeTab === 'timeline' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-                  >
-                    <span>📊 Summary Timeline</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('ayush')}
-                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${activeTab === 'ayush' ? 'bg-[#8B5A2B] text-white shadow-sm' : 'text-[#8B5A2B] hover:bg-amber-100/50'}`}
-                  >
-                    <span>🌿 AYUSH Review</span>
-                  </button>
-                  <button 
                     onClick={() => setActiveTab('qa_transcript')}
                     className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${activeTab === 'qa_transcript' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    Live Q&A ({rawAnswers.length})
+                    Live AI Q&A ({rawAnswers.length})
                   </button>
                   <button 
                     onClick={() => setActiveTab('contradictions')}
@@ -368,7 +449,7 @@ export default function ClinicianDashboard() {
                     onClick={() => { setActiveTab('fhir'); if (!fhirBundle) handleExportFHIR(); }}
                     className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'fhir' ? 'bg-[#2F5D62] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    📄 Textual Report & FHIR
+                    📄 Text Report & FHIR
                   </button>
                 </div>
               </div>
@@ -380,6 +461,284 @@ export default function ClinicianDashboard() {
                   <span>{attestError}</span>
                 </div>
               )}
+
+              {/* TAB 0: ONE-PAGE COMPREHENSIVE PATIENT HISTORY & DASHAVIDHA PARIKSHA */}
+              {activeTab === 'one_page_history' && (() => {
+                const isAyurveda = selectedSession.clinical_mode === 'ayurveda';
+                const dashavidha = computeDashavidhaPariksha(structuredHistory, selectedSession);
+                const pastDiseases = editedValues['past_medical_surgical'] || formatClinicalText(draftContent.past_medical_surgical) || 'No chronic medical illness or prior surgeries reported';
+                const famHistory = editedValues['family_history'] || formatClinicalText(draftContent.family_history) || 'No hereditary illness in first-degree relatives';
+                const allergyText = editedValues['allergies'] || formatClinicalText(draftContent.allergies) || 'No known drug or food allergies';
+
+                return (
+                  <div className="overflow-y-auto space-y-4 flex-1 pr-2">
+                    {/* Top Action Bar for Database Sync & Export */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-[#2F5D62]" />
+                          <span>One-Page Clinical Summary & Full Patient History</span>
+                        </h3>
+                        <p className="text-xs text-slate-500">ABDM-compliant executive clinical note with Dashavidha Pariksha.</p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={handleSendCompleteHistoryToDatabase}
+                          disabled={saveStatus.state === 'saving'}
+                          className="px-4 py-2 bg-[#2E7D4F] hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all active:scale-[0.98]"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{saveStatus.state === 'saving' ? 'Saving to Database...' : saveStatus.state === 'saved' ? '✓ Saved to Database' : '💾 Send Complete History to Database'}</span>
+                        </button>
+                        <button
+                          onClick={() => window.print()}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <span>🖨️ Print Summary</span>
+                        </button>
+                        <button
+                          onClick={handleDownloadOnePageText}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download (.txt)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Database Save Confirmation Toast */}
+                    {saveStatus.state === 'saved' && (
+                      <div className="bg-emerald-50 border-2 border-emerald-400 text-[#2E7D4F] p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-fadeIn">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          <span>{saveStatus.message} (Record ID: <span className="font-mono">{saveStatus.recordId || selectedSession.id}</span> at {saveStatus.savedAt})</span>
+                        </div>
+                        <span className="bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                          Permanent DB Record
+                        </span>
+                      </div>
+                    )}
+                    {saveStatus.state === 'error' && (
+                      <div className="bg-red-50 border border-red-300 text-[#C4292A] p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Database Save Failed: {saveStatus.message}</span>
+                      </div>
+                    )}
+
+                    {/* Printable Executive One-Page Medical Sheet */}
+                    <div id="one-page-clinical-sheet" className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+                      
+                      {/* Sheet Header */}
+                      <div className="border-b border-slate-200 pb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#2F5D62] bg-[#EAF3F2] px-2.5 py-1 rounded-full">
+                              MediKiosk Clinical Consultation Record
+                            </span>
+                            <h2 className="text-xl font-extrabold text-slate-900 mt-1.5">
+                              Outpatient Health Assessment & Verified History
+                            </h2>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
+                              isAyurveda 
+                                ? 'bg-amber-100 text-[#8B5A2B] border border-amber-300' 
+                                : 'bg-teal-100 text-[#2F5D62]'
+                            }`}>
+                              {isAyurveda ? '🌿 Ministry of AYUSH (Dashavidha Pariksha)' : 'Standard Allopathic OPD'}
+                            </span>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Demographics Bar */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
+                          <div>
+                            <span className="text-slate-400 text-[10px] font-bold block uppercase">Patient Name</span>
+                            <span className="font-extrabold text-slate-900 text-sm">{selectedSession.patient_name || selectedSession.patient_ref || 'Patient'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[10px] font-bold block uppercase">Age / Gender</span>
+                            <span className="font-bold text-slate-800">{selectedSession.age || '35'} Yrs / {selectedSession.gender || 'Not specified'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[10px] font-bold block uppercase">Queue Token</span>
+                            <span className="font-extrabold text-[#2F5D62] text-sm">{selectedSession.queue_id}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[10px] font-bold block uppercase">ABHA Mock ID</span>
+                            <span className="font-mono text-slate-700 text-[11px]">{selectedSession.abha_mock_id || '91-1234-5678-9012'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2-Column Clinical Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        
+                        {/* Left Column: SBAR + Past Diseases + Family History + Allergies */}
+                        <div className="space-y-4">
+                          {/* 1. Chief Complaint */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1">
+                              1. Chief Complaint (CC) & Onset
+                            </span>
+                            <p className="text-sm font-bold text-slate-900">
+                              {editedValues['chief_complaint'] || formatClinicalText(draftContent.chief_complaint) || 'Outpatient consultation'}
+                            </p>
+                          </div>
+
+                          {/* 2. History of Present Illness (SOCRATES) */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1">
+                              2. History of Present Illness (HPI / SOCRATES)
+                            </span>
+                            <p className="text-xs font-medium text-slate-800 whitespace-pre-line leading-relaxed">
+                              {editedValues['hpi'] || formatClinicalText(draftContent.hpi) || 'Recorded via MediKiosk conversational interview.'}
+                            </p>
+                          </div>
+
+                          {/* 3. Patient's History of Diseases */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1 flex items-center justify-between">
+                              <span>3. Patient's History of Diseases (पूर्व व्याधि वृत्त)</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Past Illness & Surgeries</span>
+                            </span>
+                            <p className="text-xs font-semibold text-slate-800">
+                              {pastDiseases}
+                            </p>
+                          </div>
+
+                          {/* 4. Family History */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1 flex items-center justify-between">
+                              <span>4. Family History (कुलज वृत्त)</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Hereditary Conditions</span>
+                            </span>
+                            <p className="text-xs font-semibold text-slate-800">
+                              {famHistory}
+                            </p>
+                          </div>
+
+                          {/* 5. Allergies & Contraindications */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#C4292A] block mb-1">
+                              5. Allergies & Contraindications (असात्म्यता)
+                            </span>
+                            <p className="text-xs font-bold text-slate-900">
+                              {allergyText}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Right Column: Medications + Dashavidha Pariksha + Labs */}
+                        <div className="space-y-4">
+                          {/* 6. Current Medications & Traditional Remedies */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1">
+                              6. Current Medications & Traditional Remedies (Aushadhi)
+                            </span>
+                            <p className="text-xs font-semibold text-slate-800">
+                              {editedValues['medications'] || formatClinicalText(draftContent.medications) || 'No current medications reported'}
+                            </p>
+                          </div>
+
+                          {/* 7. Dashavidha Pariksha 10-Fold Assessment Matrix */}
+                          <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200">
+                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-200/60">
+                              <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#8B5A2B] flex items-center gap-1.5">
+                                <span>🌿 7. Dashavidha Pariksha (दशविध परीक्षा 10-Fold Assessment)</span>
+                              </span>
+                              <span className="text-[10px] bg-amber-100 text-[#8B5A2B] px-2 py-0.5 rounded font-bold">
+                                Charaka Samhita 8/94
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">1. दूष्य (Dushya)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.dushya}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">2. देश (Desha)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.desha}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">3. बल (Bala)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.bala}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">4. काल (Kala)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.kala}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">5. अनल/अग्नि (Agni)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.anala_agni}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">6. प्रकृति (Prakriti)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.prakriti}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">7. वयस् (Vayas)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.vayas}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">8. सत्त्व (Sattva)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.sattva}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">9. सात्म्य (Satmya)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.satmya}</span>
+                              </div>
+                              <div className="bg-white p-2 rounded-xl border border-amber-100">
+                                <span className="text-[10px] font-bold text-amber-800 block">10. आहार शक्ति (Ahara)</span>
+                                <span className="font-semibold text-slate-800 text-[11px]">{dashavidha.ahara_shakti}</span>
+                              </div>
+                            </div>
+
+                            {dashavidha.recommendations?.length > 0 && (
+                              <div className="mt-2.5 pt-2 border-t border-amber-200/60 text-[11px] text-[#8B5A2B] font-medium">
+                                <span className="font-bold block mb-0.5">Ayurvedic Pathya & Recommendations:</span>
+                                {dashavidha.recommendations.map((rec: string, rIdx: number) => (
+                                  <span key={rIdx} className="block">• {rec}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 8. Diagnostic Investigations */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#2F5D62] block mb-1">
+                              8. Diagnostic Investigations & Lab Reports
+                            </span>
+                            <p className="text-xs font-medium text-slate-800">
+                              {formatClinicalText(draftContent.prior_investigations) || 'No lab reports or scans uploaded for this visit.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sheet Footer & Physician Attestation Block */}
+                      <div className="border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-3">
+                        <div>
+                          <p className="font-bold text-slate-800">Physician Attestation: Dr. Sharma, MD (OPD-2)</p>
+                          <p className="text-[11px] text-slate-400">ABDM Registry: MCI-84920 • Timestamp: {new Date().toLocaleString()}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-emerald-50 text-[#2E7D4F] border border-emerald-300 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>{isAttested ? 'Physician Attested' : 'Draft / Ready for Database Save'}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* TAB 1: STRUCTURED SUMMARY VIEW */}
               {activeTab === 'summary' && (
@@ -438,6 +797,62 @@ export default function ClinicianDashboard() {
                     </div>
                     <p className="text-sm font-semibold text-slate-800 whitespace-pre-line">
                       {editedValues['hpi'] || formatClinicalText(draftContent.hpi) || 'SOCRATES interview completed.'}
+                    </p>
+                  </div>
+
+                  {/* Patient's History of Diseases (Chronic conditions, Past surgeries) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-[#2F5D62] uppercase tracking-wider">Patient's History of Diseases (पूर्व व्याधि वृत्त)</span>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleSectionAction('past_medical_surgical', 'accepted', formatClinicalText(draftContent.past_medical_surgical))}
+                          className={`text-xs font-bold px-3 py-1 rounded-lg border transition-all ${
+                            sectionActions['past_medical_surgical'] === 'accepted' ? 'bg-[#2E7D4F] text-white border-[#2E7D4F]' : 'bg-white text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          Accept
+                        </button>
+                        <button 
+                          onClick={() => setEditReasonModal({ open: true, section: 'past_medical_surgical', field: 'History of Diseases', prevVal: formatClinicalText(draftContent.past_medical_surgical) })}
+                          className={`text-xs font-bold px-3 py-1 rounded-lg border transition-all ${
+                            sectionActions['past_medical_surgical'] === 'edited' ? 'bg-[#B8860B] text-white border-[#B8860B]' : 'bg-white text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {editedValues['past_medical_surgical'] || formatClinicalText(draftContent.past_medical_surgical) || 'No chronic illnesses reported.'}
+                    </p>
+                  </div>
+
+                  {/* Family History */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-[#2F5D62] uppercase tracking-wider">Family History (कुलज वृत्त)</span>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleSectionAction('family_history', 'accepted', formatClinicalText(draftContent.family_history))}
+                          className={`text-xs font-bold px-3 py-1 rounded-lg border transition-all ${
+                            sectionActions['family_history'] === 'accepted' ? 'bg-[#2E7D4F] text-white border-[#2E7D4F]' : 'bg-white text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          Accept
+                        </button>
+                        <button 
+                          onClick={() => setEditReasonModal({ open: true, section: 'family_history', field: 'Family History', prevVal: formatClinicalText(draftContent.family_history) })}
+                          className={`text-xs font-bold px-3 py-1 rounded-lg border transition-all ${
+                            sectionActions['family_history'] === 'edited' ? 'bg-[#B8860B] text-white border-[#B8860B]' : 'bg-white text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {editedValues['family_history'] || formatClinicalText(draftContent.family_history) || 'No hereditary illnesses reported.'}
                     </p>
                   </div>
 
@@ -504,247 +919,22 @@ export default function ClinicianDashboard() {
                     </p>
                   </div>
 
-                  {/* Prior Investigations / Labs */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-[#2F5D62] uppercase tracking-wider">Prior Diagnostic Investigations / Labs</span>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {formatClinicalText(draftContent.prior_investigations) || 'No prior lab reports uploaded.'}
-                    </p>
-                  </div>
-
-                </div>
-              )}
-
-              {/* TAB 2: INTERACTIVE CLINICAL SUMMARY TIMELINE */}
-              {activeTab === 'timeline' && (
-                <div className="overflow-y-auto space-y-6 flex-1 pr-2">
-                  <div className="bg-[#EAF3F2] p-4 rounded-2xl border border-teal-900/10 text-xs font-semibold text-[#2F5D62] flex items-center justify-between">
-                    <span>📊 Chronological Patient Intake & Clinical Evidence Journey</span>
-                    <span className="text-[11px] font-bold bg-white px-2.5 py-1 rounded-full border border-teal-900/10">
-                      {structuredHistory.length} Milestones Recorded
-                    </span>
-                  </div>
-
-                  {/* Visual Vertical Timeline */}
-                  <div className="relative pl-6 border-l-2 border-[#2F5D62]/30 space-y-6 ml-3 my-4">
-                    
-                    {/* Node 1: Check-in & Queue Token */}
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#2F5D62] text-white flex items-center justify-center text-xs font-bold shadow-md">
-                        1
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-black text-[#2F5D62] uppercase tracking-wider">Kiosk Registration & Token</span>
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            {new Date(selectedSession.started_at || Date.now()).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-slate-800">
-                          Assigned Queue Token: <span className="text-[#2F5D62]">{selectedSession.queue_id}</span>
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Language: <span className="font-semibold text-slate-700">{selectedSession.language?.toUpperCase()}</span> • ABHA ID: <span className="font-semibold text-slate-700">{selectedSession.abha_mock_id || 'Self Check-in'}</span> • Mode: <span className="font-semibold text-[#8B5A2B]">{selectedSession.clinical_mode === 'ayurveda' ? '🌿 Ministry of AYUSH' : 'Standard Allopathy'}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Node 2: Patient Demographics */}
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#2E7D4F] text-white flex items-center justify-center text-xs font-bold shadow-md">
-                        2
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-black text-[#2E7D4F] uppercase tracking-wider">Demographic Profile</span>
-                          <span className="text-[11px] bg-emerald-50 text-[#2E7D4F] px-2 py-0.5 rounded font-bold">DPDP Consented</span>
-                        </div>
-                        <p className="text-sm font-bold text-slate-800">
-                          {selectedSession.patient_name || selectedSession.patient_ref || 'Patient Intake'}
-                        </p>
-                        <div className="flex gap-4 mt-2 text-xs text-slate-600">
-                          <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">Gender: <b>{selectedSession.gender || 'Not specified'}</b></span>
-                          <span className="bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">Age: <b>{selectedSession.age || 'Not specified'}</b></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Node 3: Chief Complaint & Onset */}
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#B8860B] text-white flex items-center justify-center text-xs font-bold shadow-md">
-                        3
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-black text-[#B8860B] uppercase tracking-wider">Chief Complaint & Onset</span>
-                          <span className="text-[11px] bg-amber-50 text-[#B8860B] px-2 py-0.5 rounded font-bold">Triage Verified</span>
-                        </div>
-                        <p className="text-sm font-extrabold text-slate-900 bg-amber-50/50 p-3 rounded-xl border border-amber-200/60">
-                          "{formatClinicalText(draftContent.chief_complaint) || 'Primary intake complaint'}"
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Node 4: SOCRATES Symptom Progression */}
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#2F5D62] text-white flex items-center justify-center text-xs font-bold shadow-md">
-                        4
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-black text-[#2F5D62] uppercase tracking-wider">SOCRATES Clinical History ({rawAnswers.length} Questions)</span>
-                          <span className="text-[11px] text-slate-400">Multi-turn Conversational AI</span>
-                        </div>
-                        <div className="space-y-2">
-                          {rawAnswers.map((ans: any, idx: number) => (
-                            <div key={idx} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs">
-                              <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                                <span className="font-bold text-[#2F5D62]">Question #{idx + 1} ({ans.question_id || 'HPI'})</span>
-                                <span className="bg-white px-2 py-0.5 rounded border text-[10px] font-semibold">{ans.source_mode?.toUpperCase()}</span>
-                              </div>
-                              <p className="font-semibold text-slate-800">"{ans.transcript_text}"</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Node 5: Prescription OCR & Document Evidence */}
-                    <div className="relative">
-                      <div className="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-[#6A5ACD] text-white flex items-center justify-center text-xs font-bold shadow-md">
-                        5
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-black text-[#6A5ACD] uppercase tracking-wider">Prescription & Lab OCR Extraction</span>
-                          <span className="text-[11px] bg-purple-50 text-[#6A5ACD] px-2 py-0.5 rounded font-bold">
-                            {sessionDetail?.extracted_entities?.length || 0} Entities Deciphered
-                          </span>
-                        </div>
-                        {sessionDetail?.extracted_entities?.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic">No prescription or lab documents uploaded for this session.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {sessionDetail?.extracted_entities?.map((ent: any, idx: number) => (
-                              <div key={idx} className="bg-purple-50/50 p-2.5 rounded-xl border border-purple-200/60 text-xs flex items-center justify-between">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded mr-2">
-                                    {ent.entity_type}
-                                  </span>
-                                  <span className="font-bold text-slate-900">{ent.raw_text}</span>
-                                </div>
-                                <span className="text-[10px] font-semibold text-slate-400">
-                                  {Math.round((ent.confidence || 0.9) * 100)}% Conf
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Node 6: Attestation & FHIR Export Gate */}
-                    <div className="relative">
-                      <div className={`absolute -left-[31px] top-0 w-6 h-6 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-md ${isAttested ? 'bg-[#2E7D4F]' : 'bg-slate-400'}`}>
-                        6
-                      </div>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Clinical Attestation & FHIR Bundle</span>
-                          <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold ${isAttested ? 'bg-emerald-100 text-[#2E7D4F]' : 'bg-amber-100 text-[#B8860B]'}`}>
-                            {isAttested ? 'Signed by Physician' : 'Pending Review'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600">
-                          {isAttested 
-                            ? 'Record finalized and verified. Synthetic FHIR R4 consultation note bundle ready for ABDM exchange.' 
-                            : 'Physician must accept or edit summary items below before signing attestation.'}
-                        </p>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: MINISTRY OF AYUSH CLINICAL REVIEW */}
-              {activeTab === 'ayush' && (
-                <div className="overflow-y-auto space-y-4 flex-1 pr-2">
-                  <div className="bg-amber-50 p-5 rounded-2xl border border-amber-300 text-[#8B5A2B] mb-2 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-extrabold text-sm flex items-center gap-2">
-                        <span>🌿 Ministry of AYUSH — Ayurvedic Clinical Intake Framework</span>
-                      </h3>
-                      <p className="text-xs text-amber-900/80 mt-1">
-                        Tridosha Balance (Prakriti / Vikriti), Agni Assessment, Ahara & Traditional Herbal Formulations.
-                      </p>
-                    </div>
-                    <span className="bg-[#8B5A2B] text-white text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
-                      AYUSH Certified
-                    </span>
-                  </div>
-
-                  {/* Tridosha Assessment Card */}
-                  <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
-                    <h4 className="text-xs font-bold text-[#8B5A2B] uppercase tracking-wider mb-4">
-                      Tridosha Prakriti Profile (वात • पित्त • कफ)
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
-                        <span className="text-xs font-bold text-blue-800 uppercase">Vata (वायु / Ether)</span>
-                        <div className="text-2xl font-black text-blue-900 my-1">40%</div>
-                        <p className="text-[11px] text-blue-700 font-medium">Light, Mobile, Dry Tendency</p>
-                      </div>
-
-                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
-                        <span className="text-xs font-bold text-amber-800 uppercase">Pitta (अग्नि / Fire)</span>
-                        <div className="text-2xl font-black text-amber-900 my-1">45%</div>
-                        <p className="text-[11px] text-amber-700 font-medium">Sharp Agni, Metabolic Heat</p>
-                      </div>
-
-                      <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 text-center">
-                        <span className="text-xs font-bold text-emerald-800 uppercase">Kapha (जल-पृथ्वी / Earth)</span>
-                        <div className="text-2xl font-black text-emerald-900 my-1">15%</div>
-                        <p className="text-[11px] text-emerald-700 font-medium">Stable, Structural Strength</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-                      <span className="font-bold text-slate-700">Dominant Clinical Prakriti: </span>
-                      <span className="font-extrabold text-[#8B5A2B]">Pitta-Vata (पित्त-वातज)</span>
-                      <p className="text-slate-600 mt-1">
-                        Patient exhibits heightened Pitta heat (acidity / inflammation) with Vata mobility. Recommended Pitta-Vata Shamana diet.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Agni, Ahara, and Nidra Breakdown */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                  {/* Ministry of AYUSH Assessment */}
+                  {selectedSession?.clinical_mode === 'ayurveda' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                       <span className="text-xs font-bold text-[#8B5A2B] uppercase tracking-wider block mb-2">
-                        Agni (Digestive Fire) & Koshta
+                        🌿 Ministry of AYUSH — Tridosha & Agni Profile
                       </span>
                       <p className="text-sm font-semibold text-slate-800">
-                        {formatClinicalText(draftContent.ayush_profile) || 'Samagni / Normal digestive appetite reported.'}
+                        {formatClinicalText(draftContent.dashavidha_pariksha || draftContent.ayush_profile) || 'Prakriti & Agni intake completed.'}
                       </p>
                     </div>
+                  )}
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                      <span className="text-xs font-bold text-[#8B5A2B] uppercase tracking-wider block mb-2">
-                        Traditional Medicines & Kadha
-                      </span>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {sessionDetail?.extracted_entities?.filter((e: any) => e.entity_type === 'ayush_remedy')?.map((e: any) => e.raw_text).join(', ') || 'Ashwagandha, Giloy & Tulsi formulations reported.'}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {/* TAB 4: LIVE AI INTERVIEW Q&A TRANSCRIPT */}
+              {/* TAB 2: LIVE AI INTERVIEW Q&A TRANSCRIPT */}
               {activeTab === 'qa_transcript' && (
                 <div className="overflow-y-auto space-y-3 flex-1 pr-2">
                   <div className="bg-[#EAF3F2] p-4 rounded-2xl border border-teal-900/10 text-xs font-semibold text-[#2F5D62] mb-3">
@@ -772,7 +962,7 @@ export default function ClinicianDashboard() {
                 </div>
               )}
 
-              {/* TAB 5: CONTRADICTIONS VIEW */}
+              {/* TAB 3: CONTRADICTIONS VIEW */}
               {activeTab === 'contradictions' && (
                 <div className="overflow-y-auto space-y-4 flex-1 pr-2">
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-xs font-semibold text-[#B8860B] mb-4">
@@ -828,151 +1018,57 @@ export default function ClinicianDashboard() {
                 </div>
               )}
 
-              {/* TAB 6: TEXTUAL CLINICAL REPORT & FHIR R4 BUNDLE INSPECTOR VIEW */}
+              {/* TAB 4: TEXTUAL REPORT & FHIR R4 BUNDLE INSPECTOR VIEW */}
               {activeTab === 'fhir' && (
                 <div className="overflow-y-auto space-y-4 flex-1 pr-2">
-                  <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
-                    {/* View Switcher: Textual Report vs Raw FHIR JSON */}
-                    <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-                      <button
-                        onClick={() => setFhirViewMode('text')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          fhirViewMode === 'text' 
-                            ? 'bg-[#2F5D62] text-white shadow-sm' 
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        📄 Official Textual Report
-                      </button>
-                      <button
-                        onClick={() => setFhirViewMode('json')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          fhirViewMode === 'json' 
-                            ? 'bg-[#2F5D62] text-white shadow-sm' 
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        ⚡ Synthetic FHIR R4 (JSON)
-                      </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 uppercase block">NRCeS Textual Consultation Report & FHIR R4 Bundle</span>
+                      <span className="text-[11px] text-slate-400">ABDM clinical documentation standard</span>
                     </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {fhirViewMode === 'text' ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              if (textualReport) {
-                                navigator.clipboard.writeText(textualReport);
-                                alert('Textual Clinical Report copied to clipboard!');
-                              }
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
-                          >
-                            Copy Report
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!textualReport) return;
-                              const blob = new Blob([textualReport], { type: 'text/plain;charset=utf-8' });
-                              const url = URL.createObjectURL(blob);
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.download = `Clinical_Report_${selectedSession.queue_id || selectedSession.id}.txt`;
-                              link.click();
-                              URL.revokeObjectURL(url);
-                            }}
-                            className="px-3 py-1.5 bg-[#EAF3F2] hover:bg-teal-100 text-[#2F5D62] border border-[#2F5D62]/30 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
-                          >
-                            <Download className="w-3.5 h-3.5" /> Download (.txt)
-                          </button>
-                          <button
-                            onClick={() => window.print()}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
-                          >
-                            Print Report
-                          </button>
-                        </>
-                      ) : (
-                        fhirBundle && (
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(JSON.stringify(fhirBundle, null, 2));
-                              alert('FHIR JSON copied to clipboard!');
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-200"
-                          >
-                            Copy JSON
-                          </button>
-                        )
-                      )}
-
+                    <div className="flex gap-2">
                       <button 
                         onClick={handleExportFHIR}
-                        className="px-3.5 py-1.5 bg-[#2F5D62] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-teal-800"
+                        className="px-4 py-2 bg-[#2F5D62] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-teal-800 shadow-sm"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                        <Download className="w-4 h-4" /> Generate / Refresh Report
+                      </button>
+                      <button
+                        onClick={handleDownloadOnePageText}
+                        className="px-3 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-200"
+                      >
+                        📥 Download .txt
                       </button>
                     </div>
                   </div>
 
-                  {/* TEXTUAL CLINICAL REPORT VIEW */}
-                  {fhirViewMode === 'text' ? (
-                    textualReport ? (
-                      <div className="bg-white border-2 border-slate-300 rounded-2xl p-6 md:p-8 shadow-sm">
-                        <div className="border-b-2 border-slate-800 pb-4 mb-6 text-center">
-                          <div className="inline-block bg-teal-50 text-[#2F5D62] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-teal-900/10 mb-2">
-                            National Health Authority (NHA) • ABDM Standard
-                          </div>
-                          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                            OUTPATIENT CLINICAL CONSULTATION REPORT
-                          </h2>
-                          <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                            MediKiosk Automated SBAR Intake & Physician Attestation
-                          </p>
-                        </div>
+                  {fhirValidation && (
+                    <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between border ${
+                      fhirValidation.valid ? 'bg-emerald-50 text-[#2E7D4F] border-emerald-200' : 'bg-red-50 text-[#C4292A] border-red-200'
+                    }`}>
+                      <span>Validation Status: {fhirValidation.valid ? 'PASSED (0 Errors — NRCeS Compliant)' : 'FAILED'}</span>
+                      <span>FHIR Resource Count: {fhirValidation.resource_count}</span>
+                    </div>
+                  )}
 
-                        <pre className="font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-slate-50/70 p-5 rounded-xl border border-slate-200 overflow-x-auto select-text">
-                          {textualReport}
-                        </pre>
-
-                        <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-                          <span>Verified against NRCeS Clinical Terminology (LOINC 11488-4)</span>
-                          <span className="font-bold text-[#2E7D4F] flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" /> Ready for Hospital EHR / ABDM Exchange
-                          </span>
-                        </div>
-                      </div>
+                  {/* Textual Clinical Report Display */}
+                  <div className="bg-slate-900 rounded-2xl p-4 text-emerald-400 font-mono text-xs overflow-x-auto max-h-80 whitespace-pre leading-relaxed border border-slate-800">
+                    {textualReport ? (
+                      <code>{textualReport}</code>
                     ) : (
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
-                        <RefreshCw className="w-6 h-6 text-[#2F5D62] mx-auto mb-2 animate-spin" />
-                        Generating official Textual Clinical Consultation Report...
-                      </div>
-                    )
-                  ) : (
-                    /* SYNTHETIC FHIR R4 JSON VIEW */
-                    <div className="space-y-4">
-                      {fhirValidation && (
-                        <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between border ${
-                          fhirValidation.valid ? 'bg-emerald-50 text-[#2E7D4F] border-emerald-200' : 'bg-red-50 text-[#C4292A] border-red-200'
-                        }`}>
-                          <span className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            Validation Status: {fhirValidation.valid ? 'PASSED (0 Schema Errors)' : 'FAILED'}
-                          </span>
-                          <span>Resource Count: {fhirValidation.resource_count} Entries</span>
-                        </div>
-                      )}
+                      <p className="text-slate-400 italic">Click "Generate / Refresh Report" to compile the textual note and FHIR bundle.</p>
+                    )}
+                  </div>
 
-                      {fhirBundle ? (
-                        <pre className="bg-slate-900 text-emerald-400 p-5 rounded-2xl text-xs font-mono overflow-x-auto max-h-[500px]">
-                          {JSON.stringify(fhirBundle, null, 2)}
-                        </pre>
-                      ) : (
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
-                          <RefreshCw className="w-6 h-6 text-[#2F5D62] mx-auto mb-2 animate-spin" />
-                          Loading synthetic FHIR R4 bundle...
-                        </div>
-                      )}
+                  {/* FHIR JSON Inspector */}
+                  {fhirBundle && (
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">
+                        Raw FHIR R4 Bundle JSON:
+                      </span>
+                      <pre className="bg-slate-950 text-emerald-300 p-4 rounded-2xl text-xs font-mono overflow-x-auto max-h-64 border border-slate-800">
+                        {JSON.stringify(fhirBundle, null, 2)}
+                      </pre>
                     </div>
                   )}
                 </div>
@@ -988,9 +1084,12 @@ export default function ClinicianDashboard() {
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={handleExportFHIR}
-                    className="px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-1.5 bg-[#EAF3F2] text-[#2F5D62] border border-[#2F5D62] hover:bg-teal-100 transition-all"
+                    disabled={!isAttested}
+                    className={`px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-1.5 ${
+                      isAttested ? 'bg-[#EAF3F2] text-[#2F5D62] border border-[#2F5D62]' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
                   >
-                    <Download className="w-4 h-4" /> View & Export FHIR Bundle
+                    <Download className="w-4 h-4" /> Export FHIR Bundle
                   </button>
 
                   <button

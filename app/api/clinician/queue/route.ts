@@ -11,6 +11,8 @@ export async function GET() {
         s.patient_name,
         s.age,
         s.gender,
+        s.clinical_mode,
+        s.abha_mock_id,
         s.language,
         s.status,
         s.started_at,

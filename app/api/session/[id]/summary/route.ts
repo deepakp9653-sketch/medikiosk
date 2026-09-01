@@ -23,7 +23,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const extractedEntities = entitiesRes.rows;
 
     // 4. Generate bilingual draft summary via Mistral
-    const summaryJSON = await generateBilingualSummary(structuredHistory, extractedEntities, session.language || 'hi');
+    const summaryJSON = await generateBilingualSummary(
+      structuredHistory, 
+      extractedEntities, 
+      session.language || 'hi',
+      session.clinical_mode || 'allopathy'
+    );
 
     // 5. Store draft summary (Intake Draft Layer)
     const inputHash = `hash_${Date.now()}_${structuredHistory.length}_${extractedEntities.length}`;
