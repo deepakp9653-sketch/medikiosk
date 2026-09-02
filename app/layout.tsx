@@ -1,20 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Sora, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const sora = Sora({
+  variable: "--font-sora",
   subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin"],
+  weight: ["600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "MediKiosk - Multilingual Voice AI OPD Triage",
-  description: "Automated multilingual conversational intake, OCR document reconciliation, and clinician review for OPD clinics.",
+  title: "MediKiosk — Structured clinical history before the room",
+  description:
+    "AI-powered multimodal clinical intake for Indian hospital OPDs. Voice and touch, AYUSH and allopathic, ABDM-compliant. SIH 2026 · SIH26047.",
 };
 
 export default function RootLayout({
@@ -25,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${sora.variable} ${sourceSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
