@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { 
   Volume2, Mic, MicOff, Camera, Upload, CheckCircle2 as CheckCircle, AlertTriangle, 
-  ChevronRight, HeartPulse, User, 
-  HelpCircle, FileText, XCircle, Globe, RefreshCw
+  ChevronRight, HeartPulse, User, Clock, ShieldCheck,
+  HelpCircle, FileText, XCircle, Globe, RefreshCw, Lock, Stethoscope
 } from '@/components/Icons';
+import { allocateDoctorAndRoom, getEstimatedQueueTime, playEmergencySirenAudio, playHospitalChime } from '@/lib/doctors';
 
 // Helper function to safely convert any clinical value (string, object, array) into a string
 function formatClinicalText(val: any): string {
@@ -46,6 +47,11 @@ interface LanguagePack {
   consent_agree: string;
   consent_decline: string;
   consent_prompt: string;
+  reception_title?: string;
+  reception_body?: string;
+  reception_prompt?: string;
+  reception_counter?: string;
+  reception_return_consent?: string;
 
   // Identify Screen & Demographics
   identify_title: string;
@@ -119,8 +125,13 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_body: 'आपकी चिकित्सा जानकारी केवल आपके डॉक्टर के परामर्श और पूर्व-जांच सारांश तैयार करने के लिए सुरक्षित रूप से ली जा रही है। यह डेटा पूरी तरह गोपनीय है और किसी तीसरे पक्ष के साथ साझा नहीं किया जाएगा।',
     consent_guardian: 'अभिभावक/केयरगिवर के रूप में सहमति',
     consent_agree: 'सहमति दें और आगे बढ़ें',
-    consent_decline: 'अस्वीकार करें',
-    consent_prompt: 'कृपया डेटा सहमति को ध्यान से सुनें और स्वीकार करें।',
+    consent_decline: 'अस्वीकार करें (रिसेप्शन पर जाएं)',
+    consent_prompt: 'आपकी चिकित्सा जानकारी केवल आपके डॉक्टर के परामर्श के लिए सुरक्षित रूप से ली जा रही है। कृपया आगे बढ़ने के लिए सहमति दें, या अस्वीकार करने पर रिसेप्शन पर जाएं।',
+    reception_title: 'डिजिटल सहमति अस्वीकार — कृपया अस्पताल रिसेप्शन पर जाएं',
+    reception_body: 'चूंकि डिजिटल स्वास्थ्य डेटा सहमति प्रदान नहीं की गई है, कियोस्क पर डिजिटल साक्षात्कार आगे नहीं बढ़ाया जा सकता। कृपया भौतिक पर्ची एवं सहायता के लिए भूतल पर मुख्य रिसेप्शन काउंटर (Counter 1-4) पर जाएं।',
+    reception_prompt: 'डिजिटल सहमति प्रदान नहीं की गई है। कृपया भौतिक पर्ची और पंजीकरण के लिए मुख्य अस्पताल रिसेप्शन काउंटर पर जाएं।',
+    reception_counter: 'भूतल • मुख्य रिसेप्शन काउंटर 1-4',
+    reception_return_consent: 'सहमति देकर कियोस्क जारी रखें',
     identify_title: 'रोगी पहचान एवं विवरण',
     identify_subtitle: 'कृपया अपना नाम, उम्र और लिंग दर्ज करें।',
     name_label: 'रोगी का पूरा नाम',
@@ -143,7 +154,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'हिन्दी वॉइस व टच मोड',
     self_report_note: 'डॉक्टर की समीक्षा के लिए रोगी द्वारा दी गई जानकारी',
     mic_start_text: 'माइक दबाकर बोलें — बोलने के बाद नीचे सबमिट बटन दबाएं',
-    mic_active_text: '🎙️ लाइव वॉइस चालू है — बोलें और नीचे सबमिट बटन दबाएं',
+    mic_active_text: 'लाइव वॉइस चालू है — बोलें और नीचे सबमिट बटन दबाएं',
     mic_tap_stop: 'माइक बंद करने के लिए दोबारा दबाएं',
     voice_submit_btn: 'उत्तर सबमिट करें',
     voice_clear_btn: 'पुनः बोलें',
@@ -182,8 +193,13 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     consent_body: 'Your medical information is collected solely for clinical consultation and preliminary intake summary preparation. Your data is protected under India DPDP rules and never shared with third parties.',
     consent_guardian: 'Consent as Guardian / Caregiver for patient',
     consent_agree: 'Agree & Continue',
-    consent_decline: 'Decline',
-    consent_prompt: 'Please listen carefully to the data consent notice and tap agree to proceed.',
+    consent_decline: 'Decline (Visit Reception)',
+    consent_prompt: 'Your health data is collected solely for clinical consultation under DPDP rules. Please tap Agree and Continue to proceed, or Decline to visit the reception.',
+    reception_title: 'Consent Not Provided • Please Visit Hospital Reception',
+    reception_body: 'Since digital health data consent was declined, automated kiosk intake cannot proceed. Please visit the Central Hospital Reception (Counters 1-4, Ground Floor) where staff will assist you with offline paper registration.',
+    reception_prompt: 'Digital consent was not provided. Please visit the central hospital reception desk on the ground floor for manual registration and offline paper assistance.',
+    reception_counter: 'Ground Floor • Main Reception Counters 1–4',
+    reception_return_consent: 'Change Mind — Give Consent & Proceed',
     identify_title: 'Patient Details & Demographics',
     identify_subtitle: 'Please provide your full name, age, and gender before the consultation.',
     name_label: 'Patient Full Name',
@@ -206,7 +222,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'English Voice & Touch Mode',
     self_report_note: 'Self-reported intake information for physician review',
     mic_start_text: 'Tap microphone to speak, then press Submit Answer below',
-    mic_active_text: '🎙️ Live Voice Active — Speak and tap Submit below',
+    mic_active_text: 'Live Voice Active — Speak and tap Submit below',
     mic_tap_stop: 'Tap microphone again anytime to mute',
     voice_submit_btn: 'Submit Spoken Answer',
     voice_clear_btn: 'Clear & Re-speak',
@@ -269,7 +285,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'मराठी व्हॉइस आणि टच मोड',
     self_report_note: 'डॉक्टरांच्या तपासणीसाठी रुग्णाने दिलेली माहिती',
     mic_start_text: 'माईक सुरू करून बोला व खाली दिलेले सबमिट बटण दाबा',
-    mic_active_text: '🎙️ लाईव्ह व्हॉइस चालू आहे — बोलून खाली सबमिट दाबा',
+    mic_active_text: 'लाईव्ह व्हॉइस चालू आहे — बोलून खाली सबमिट दाबा',
     mic_tap_stop: 'माईक बंद करण्यासाठी पुन्हा दाबा',
     voice_submit_btn: 'उत्तर सबमिट करा',
     voice_clear_btn: 'पुन्हा बोला',
@@ -332,7 +348,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'বাংলা ভয়েস ও স্পর্শ মোড',
     self_report_note: 'ডাক্তারের পরীক্ষার জন্য রোগীর দ্বারা প্রদত্ত তথ্য',
     mic_start_text: 'মাইক্রোফোনে কথা বলুন এবং নিচে জমা দিন বাটনে চাপুন',
-    mic_active_text: '🎙️ লাইভ ভয়েস চালু আছে — কথা বলে জমা দিন বাটনে চাপুন',
+    mic_active_text: 'লাইভ ভয়েস চালু আছে — কথা বলে জমা দিন বাটনে চাপুন',
     mic_tap_stop: 'মাইক্রোফোন বন্ধ করতে স্পর্শ করুন',
     voice_submit_btn: 'উত্তর জমা দিন',
     voice_clear_btn: 'পুনরায় বলুন',
@@ -395,7 +411,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'తెలుగు వాయిస్ & టచ్ మోడ్',
     self_report_note: 'వైద్యుల సమీక్ష కోసం రోగి తెలిపిన వివరాలు',
     mic_start_text: 'మైక్ నొక్కి మాట్లాడండి, ఆపై సమర్పించు బటన్ నొక్కండి',
-    mic_active_text: '🎙️ లైవ్ వాయిస్ ఆన్ — మాట్లాడిన తర్వాత సమర్పించండి',
+    mic_active_text: 'లైవ్ వాయిస్ ఆన్ — మాట్లాడిన తర్వాత సమర్పించండి',
     mic_tap_stop: 'మైక్ ఆపడానికి మళ్లీ తాకండి',
     voice_submit_btn: 'సమాధానం పంపండి',
     voice_clear_btn: 'మళ్లీ మాట్లాడండి',
@@ -458,7 +474,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'தமிழ் குரல் மற்றும் தொடு முறை',
     self_report_note: 'மருத்துவர் பார்வைக்காக நோயாளி அளித்த விவரங்கள்',
     mic_start_text: 'மைக் அழுத்திப் பேசிவிட்டு சமர்ப்பிக்கவும்',
-    mic_active_text: '🎙️ நேரடி குரல் இயங்குகிறது — பேசிவிட்டு கீழே சமர்ப்பிக்கவும்',
+    mic_active_text: 'நேரடி குரல் இயங்குகிறது — பேசிவிட்டு கீழே சமர்ப்பிக்கவும்',
     mic_tap_stop: 'மைக்கை நிறுத்த மீண்டும் தொடவும்',
     voice_submit_btn: 'பதிலை அனுப்புக',
     voice_clear_btn: 'மீண்டும் பேசுக',
@@ -521,7 +537,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'ગુજરાતી વૉઇસ અને ટચ મોડ',
     self_report_note: 'ડૉક્ટરની સમીક્ષા માટે દર્દી દ્વારા આપવામાં આવેલી માહિતી',
     mic_start_text: 'માઇક દબાવીને બોલો અને નીચે સબમિટ બટન દબાવો',
-    mic_active_text: '🎙️ લાઈવ વૉઇસ ચાલુ છે — બોલીને સબમિટ કરો',
+    mic_active_text: 'લાઈવ વૉઇસ ચાલુ છે — બોલીને સબમિટ કરો',
     mic_tap_stop: 'માઇક બંધ કરવા ફરીથી દબાવો',
     voice_submit_btn: 'જવાબ સબમિટ કરો',
     voice_clear_btn: 'ફરીથી બોલો',
@@ -584,7 +600,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'ಕನ್ನಡ ಧ್ವನಿ ಮತ್ತು ಸ್ಪರ್ಶ ಮೋಡ್',
     self_report_note: 'ವೈದ್ಯರ ಪರಿಶೀಲನೆಗಾಗಿ ರೋಗಿ ನೀಡಿರುವ ವಿವರಗಳು',
     mic_start_text: 'ಮೈಕ್ ಒತ್ತಿ ಮಾತನಾಡಿ ಮತ್ತು ಕೆಳಗಿನ ಸಲ್ಲಿಕೆ ಬಟನ್ ಒತ್ತಿರಿ',
-    mic_active_text: '🎙️ ಲೈವ್ ಧ್ವನಿ ಸಕ್ರಿಯ — ಮಾತನಾಡಿ ಸಬ್ಮಿಟ್ ಒತ್ತಿ',
+    mic_active_text: 'ಲೈವ್ ಧ್ವನಿ ಸಕ್ರಿಯ — ಮಾತನಾಡಿ ಸಬ್ಮಿಟ್ ಒತ್ತಿ',
     mic_tap_stop: 'ಮೈಕ್ ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಸ್ಪರ್ಶಿಸಿ',
     voice_submit_btn: 'ಉತ್ತರ ಕಳುಹಿಸಿ',
     voice_clear_btn: 'ಮತ್ತೆ ಮಾತನಾಡಿ',
@@ -647,7 +663,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'മലയാളം വോയ്‌സ് & ടച്ച് മോഡ്',
     self_report_note: 'ഡോക്ടറുടെ പരിശോധനയ്ക്കായി രോഗി നൽകിയ വിവരങ്ങൾ',
     mic_start_text: 'മൈക്ക് ഓൺ ചെയ്ത് സംസാരിക്കുക, ശേഷം സബ്മിറ്റ് അമർത്തുക',
-    mic_active_text: '🎙️ ലൈവ് വോയ്‌സ് ഓൺ — സംസാരിച്ച ശേഷം സബ്മിറ്റ് ചെയ്യുക',
+    mic_active_text: 'ലൈവ് വോയ്‌സ് ഓൺ — സംസാരിച്ച ശേഷം സബ്മിറ്റ് ചെയ്യുക',
     mic_tap_stop: 'മൈക്ക് നിർത്താൻ വീണ്ടും തൊടുക',
     voice_submit_btn: 'ഉത്തരം സമർപ്പിക്കുക',
     voice_clear_btn: 'വീണ്ടും പറയുക',
@@ -710,7 +726,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
     mode_badge: 'ਪੰਜਾਬੀ ਆਵਾਜ਼ ਅਤੇ ਟੱਚ ਮੋਡ',
     self_report_note: 'ਡਾਕਟਰ ਦੀ ਜਾਂਚ ਲਈ ਮਰੀਜ਼ ਦੁਆਰਾ ਦਿੱਤੀ ਗਈ ਜਾਣਕਾਰੀ',
     mic_start_text: 'ਮਾਈਕ ਦਬਾ ਕੇ ਬੋਲੋ ਅਤੇ ਹੇਠਾਂ ਦਿੱਤਾ ਸਬਮਿਟ ਬਟਨ ਦਬਾਓ',
-    mic_active_text: '🎙️ ਲਾਈਵ ਆਵਾਜ਼ ਚਾਲੂ ਹੈ — ਬੋਲੋ ਅਤੇ ਸਬਮਿਟ ਦਬਾਓ',
+    mic_active_text: 'ਲਾਈਵ ਆਵਾਜ਼ ਚਾਲੂ ਹੈ — ਬੋਲੋ ਅਤੇ ਸਬਮਿਟ ਦਬਾਓ',
     mic_tap_stop: 'ਮਾਈਕ ਬੰਦ ਕਰਨ ਲਈ ਦੁਬਾਰਾ ਦਬਾਓ',
     voice_submit_btn: 'ਜਵਾਬ ਦਰਜ ਕਰੋ',
     voice_clear_btn: 'ਮੁੜ ਬੋਲੋ',
@@ -737,7 +753,7 @@ const LOCALIZED_LANGUAGES: Record<string, LanguagePack> = {
 };
 
 export default function KioskPortal() {
-  const [step, setStep] = useState<'language' | 'consent' | 'identify' | 'interview' | 'red_flag' | 'scan' | 'confirm'>('language');
+  const [step, setStep] = useState<'language' | 'consent' | 'consent_declined' | 'identify' | 'interview' | 'red_flag' | 'scan' | 'confirm'>('language');
   const [language, setLanguage] = useState<string>('hi');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [queueId, setQueueId] = useState<string>('Q-101');
@@ -751,6 +767,15 @@ export default function KioskPortal() {
   const [isListeningForName, setIsListeningForName] = useState<boolean>(false);
   
   const currentLang = LOCALIZED_LANGUAGES[language] || LOCALIZED_LANGUAGES.hi;
+
+  // Auto-speak audio prompts on entering consent or reception guidance
+  useEffect(() => {
+    if (step === 'consent') {
+      speakPrompt(currentLang.consent_prompt);
+    } else if (step === 'consent_declined') {
+      speakPrompt(currentLang.reception_prompt || 'Digital consent was not provided. Please visit the central hospital reception desk on the ground floor for manual registration and offline assistance.');
+    }
+  }, [step]);
 
   // Fetch continuous sequential queue token on load
   useEffect(() => {
@@ -1047,7 +1072,7 @@ export default function KioskPortal() {
         body: JSON.stringify({ 
           language: langCode, 
           queue_id: queueId, 
-          abha_mock_id: abhaId || null,
+          abha_mock_id: abhaId.trim() ? abhaId.trim() : null,
           clinical_mode: clinicalMode
         })
       });
@@ -1070,7 +1095,7 @@ export default function KioskPortal() {
       setShowAyushModal(false);
       setAyushPasswordInput('');
       setAyushError(null);
-      alert('🌿 Ministry of AYUSH (Ayurveda) Mode Activated successfully!');
+      alert('Ministry of AYUSH (Ayurveda) Mode Activated successfully!');
     } else {
       setAyushError('Invalid password. Please enter the official AYUSH password: Ayurveda');
     }
@@ -1084,7 +1109,8 @@ export default function KioskPortal() {
   // Record Consent
   const handleConsent = async (agreed: boolean) => {
     if (!agreed) {
-      alert('Consent declined.');
+      setStep('consent_declined');
+      speakPrompt(currentLang.reception_prompt || 'Digital consent was not provided. Please visit the central hospital reception desk on the ground floor for manual registration and offline paper assistance.');
       return;
     }
     if (sessionId) {
@@ -1111,7 +1137,7 @@ export default function KioskPortal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           queue_id: queueId,
-          abha_mock_id: abhaId || null,
+          abha_mock_id: abhaId.trim() ? abhaId.trim() : null,
           patient_name: effectiveName,
           age: effectiveAge,
           gender: effectiveGender
@@ -1198,6 +1224,7 @@ export default function KioskPortal() {
       if (data.red_flag) {
         setRedFlagTrigger(data.trigger);
         setStep('red_flag');
+        playEmergencySirenAudio();
         speakPrompt(currentLang.red_flag_default);
         return;
       }
@@ -1251,96 +1278,110 @@ export default function KioskPortal() {
       await fetch(`/api/session/${sessionId}/summary`, { method: 'POST' });
     }
     setStep('confirm');
+    playHospitalChime();
     speakPrompt(currentLang.confirm_prompt);
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAF9] flex flex-col justify-between p-4 md:p-6 max-w-5xl mx-auto">
-      {/* Kiosk Header */}
-      <header className="flex flex-wrap items-center justify-between py-3 border-b border-teal-900/10 mb-6 bg-white rounded-2xl p-4 shadow-sm gap-3">
-        <Link href="/" className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${clinicalMode === 'ayurveda' ? 'bg-[#8B5A2B]' : 'bg-[#2F5D62]'}`}>
-            <HeartPulse className="w-6 h-6 text-[#EAF3F2]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className={`text-lg font-bold ${clinicalMode === 'ayurveda' ? 'text-[#8B5A2B]' : 'text-[#2F5D62]'}`}>{currentLang.app_title}</h1>
-              {clinicalMode === 'ayurveda' && (
-                <span className="bg-amber-100 text-[#8B5A2B] border border-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  🌿 Ministry of AYUSH
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500">{currentLang.name} ({currentLang.native}) {clinicalMode === 'ayurveda' ? '• आयुर्वेद क्लिनिकल मोड' : '• OPD Kiosk'}</p>
-          </div>
-        </Link>
+    <div className="min-h-screen bg-cornsilk text-ink-black flex flex-col relative overflow-hidden">
+      {/* Abstract Background Texture matching Landing Page */}
+      <img
+        src="/assets/illustrations/bg-abstract.svg"
+        alt=""
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.18]"
+      />
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {clinicalMode === 'ayurveda' ? (
-            <button 
-              onClick={handleDisableAyushMode}
-              className="touch-target bg-amber-50 text-[#8B5A2B] border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-100"
-              title="Click to switch back to Allopathy"
-            >
-              <span>🌿 AYUSH Active (Click to Exit)</span>
-            </button>
-          ) : (
-            <button 
-              onClick={() => { setShowAyushModal(true); setAyushError(null); setAyushPasswordInput(''); }}
-              className="touch-target bg-emerald-50 text-[#2E7D4F] border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-100 transition-all"
-              title="Activate Ministry of AYUSH Mode (Password Protected)"
-            >
-              <span>🌿 Ministry of AYUSH Mode</span>
-            </button>
-          )}
+      {/* MediKiosk Sticky Top Navigation Header */}
+      <header className="sticky top-0 z-50 bg-pine-teal border-b border-white/10 shadow-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-6">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="font-[family-name:var(--font-sora)] text-base font-bold tracking-tight text-cornsilk md:text-lg">
+              MediKiosk
+            </span>
+            <span className="text-[10px] bg-metallic-gold text-ink-black font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              Patient Intake
+            </span>
+          </Link>
 
-          <button 
-            onClick={() => setStep('language')}
-            className="touch-target bg-slate-100 text-[#2F5D62] border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-200"
-          >
-            <Globe className="w-4 h-4" />
-            <span>{currentLang.change_lang}</span>
-          </button>
-          <button 
-            onClick={() => speakPrompt(currentLang.help_notified)}
-            className="touch-target bg-amber-50 text-[#B8860B] border border-amber-200 rounded-xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 hover:bg-amber-100"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>{currentLang.human_help}</span>
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {clinicalMode === 'ayurveda' ? (
+              <button 
+                onClick={handleDisableAyushMode}
+                className="touch-target bg-metallic-gold text-ink-black rounded-xl px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 shadow-sm hover:brightness-105"
+                title="Click to switch back to Allopathy"
+              >
+                <span>AYUSH Active (Exit)</span>
+              </button>
+            ) : (
+              <button 
+                onClick={() => { setShowAyushModal(true); setAyushError(null); setAyushPasswordInput(''); }}
+                className="touch-target bg-white/15 text-cornsilk border border-white/20 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-white/25 transition-all"
+                title="Activate Ministry of AYUSH Mode (Password Protected)"
+              >
+                <span>AYUSH Mode</span>
+              </button>
+            )}
+
+            <button 
+              onClick={() => setStep('language')}
+              className="touch-target bg-white/15 text-cornsilk border border-white/20 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-white/25 transition-all"
+            >
+              <Globe className="w-4 h-4 text-metallic-gold" />
+              <span>{currentLang.change_lang}</span>
+            </button>
+            <button 
+              onClick={() => speakPrompt(currentLang.help_notified)}
+              className="touch-target bg-metallic-gold text-ink-black rounded-xl px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5 hover:brightness-105 shadow-sm"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>{currentLang.human_help}</span>
+            </button>
+
+            <Link
+              href="/clinician"
+              className="touch-target bg-white/15 text-cornsilk border border-white/20 hover:bg-white/25 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-all"
+              title="Open Doctor Clinician Login Portal"
+            >
+              <Lock className="w-3.5 h-3.5 text-metallic-gold" />
+              <span>Doctor Login</span>
+            </Link>
+          </div>
         </div>
       </header>
 
+      {/* Main Kiosk Content Area */}
+      <main className="flex-1 flex flex-col justify-between p-4 md:p-6 max-w-5xl mx-auto w-full relative z-10">
+
       {/* AYUSH PASSWORD VERIFICATION MODAL */}
       {showAyushModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border-2 border-amber-300 shadow-2xl animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border-2 border-amber-400 shadow-2xl animate-in fade-in duration-200">
             <div className="text-center mb-5">
-              <div className="w-16 h-16 bg-amber-100 text-[#8B5A2B] rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl">
-                🌿
+              <div className="w-16 h-16 bg-pine-teal/10 text-pine-teal rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm">
+                <ShieldCheck className="w-8 h-8 text-pine-teal" />
               </div>
-              <h3 className="text-xl font-extrabold text-slate-900">Ministry of AYUSH Mode</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Enter the authorized clinical password to activate Tridosha (Vata-Pitta-Kapha) & Agni intake portal.
+              <h3 className="text-xl font-extrabold text-slate-900 font-[family-name:var(--font-sora)]">Ministry of AYUSH Mode</h3>
+              <p className="text-xs text-slate-600 mt-1 font-medium">
+                Enter authorized clinical credentials to activate Tridosha (Vata-Pitta-Kapha) & Agni intake portal.
               </p>
             </div>
 
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Authorized Password</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Authorized Password</label>
                 <input 
                   type="password" 
                   value={ayushPasswordInput}
                   onChange={e => setAyushPasswordInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAyushPasswordSubmit()}
-                  placeholder="Enter password (e.g. Ayurveda)"
-                  className="w-full p-3.5 border-2 border-slate-300 rounded-xl text-base font-bold text-slate-900 focus:border-[#8B5A2B] outline-none"
+                  placeholder="Enter authorized clinical password"
+                  className="w-full p-3.5 border-2 border-slate-300 rounded-xl text-base font-bold text-slate-900 focus:border-pine-teal outline-none shadow-sm"
                   autoFocus
                 />
               </div>
 
               {ayushError && (
-                <p className="text-xs font-bold text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                <p className="text-xs font-bold text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-200">
                   {ayushError}
                 </p>
               )}
@@ -1369,7 +1410,7 @@ export default function KioskPortal() {
         <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm text-center my-auto">
           {clinicalMode === 'ayurveda' && (
             <div className="bg-amber-50 border border-amber-300 text-[#8B5A2B] p-3 rounded-2xl mb-5 flex items-center justify-center gap-2 text-xs font-bold">
-              <span>🌿 Ministry of AYUSH Mode is ACTIVE — Ayurvedic Prakriti & Tridosha Intake Enabled</span>
+              <span>Ministry of AYUSH Mode is ACTIVE — Ayurvedic Prakriti & Tridosha Intake Enabled</span>
             </div>
           )}
 
@@ -1403,7 +1444,7 @@ export default function KioskPortal() {
                 onClick={() => { setShowAyushModal(true); setAyushError(null); setAyushPasswordInput(''); }}
                 className="text-xs font-bold text-[#8B5A2B] bg-amber-50 hover:bg-amber-100 border border-amber-300 px-4 py-2 rounded-xl flex items-center gap-2 transition-all"
               >
-                <span>🌿 Switch to Ministry of AYUSH Mode (Password Protected)</span>
+                <span>Switch to Ministry of AYUSH Mode (Password Protected)</span>
               </button>
             ) : (
               <button
@@ -1417,47 +1458,164 @@ export default function KioskPortal() {
         </div>
       )}
 
-      {/* STEP 2: DPDP CONSENT (FULLY LOCALIZED) */}
+      {/* STEP 2: DPDP CONSENT (FULLY LOCALIZED WITH AUDIO) */}
       {step === 'consent' && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm my-auto">
-          <div className="flex items-center gap-3 text-[#2F5D62] mb-4">
-            <h2 className="text-2xl font-bold">{currentLang.consent_title}</h2>
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 md:p-8 border border-border-strong shadow-xl my-auto max-w-2xl mx-auto w-full">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3 text-pine-teal">
+              <div className="w-10 h-10 rounded-xl bg-pine-teal/10 flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-pine-teal" />
+              </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-extrabold text-ink-black font-[family-name:var(--font-sora)]">
+                  {currentLang.consent_title}
+                </h2>
+                <span className="text-[11px] text-ink-black/60 font-semibold uppercase tracking-wider">
+                  India DPDP Act Compliant Notice
+                </span>
+              </div>
+            </div>
+
+            {/* Audio Listen / Replay Button */}
+            <button
+              type="button"
+              onClick={() => speakPrompt(currentLang.consent_prompt)}
+              className="px-3.5 py-2 rounded-xl bg-pine-teal/10 hover:bg-pine-teal/20 text-pine-teal text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+              title="Listen to Audio Notice"
+            >
+              <Volume2 className="w-4 h-4 text-pine-teal" />
+              <span>सुनें / Listen (Audio)</span>
+            </button>
           </div>
 
-          <div className="bg-[#EAF3F2] p-6 rounded-2xl mb-6 text-slate-800 text-base leading-relaxed border border-teal-900/10">
-            <p className="text-lg font-bold text-slate-900 mb-2">
+          <div className="bg-cornsilk/60 p-5 md:p-6 rounded-2xl mb-5 text-ink-black text-sm md:text-base leading-relaxed border border-border-strong">
+            <p className="font-semibold text-ink-black mb-3">
               {currentLang.consent_body}
             </p>
+            <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-pine-teal font-bold">
+              <span className="flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5" /> Audio announcement active in {currentLang.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => speakPrompt(currentLang.consent_prompt)}
+                className="underline hover:text-teal-900 cursor-pointer text-[11px]"
+              >
+                Replay Audio
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <input 
               type="checkbox" 
               id="guardian" 
               checked={isGuardian} 
               onChange={e => setIsGuardian(e.target.checked)}
-              className="w-5 h-5 accent-[#2F5D62] rounded" 
+              className="w-5 h-5 accent-pine-teal rounded cursor-pointer" 
             />
-            <label htmlFor="guardian" className="text-sm font-semibold text-slate-700">
+            <label htmlFor="guardian" className="text-xs md:text-sm font-semibold text-slate-700 cursor-pointer select-none">
               {currentLang.consent_guardian}
             </label>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <button
               onClick={() => handleConsent(true)}
-              className="touch-target bg-[#2F5D62] text-white hover:bg-teal-800 rounded-2xl p-4 font-bold text-lg flex items-center justify-center gap-2 shadow-md"
+              className="touch-target bg-pine-teal text-cornsilk hover:brightness-110 active:scale-[0.98] rounded-2xl p-4 font-bold text-base md:text-lg flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
             >
-              <CheckCircle className="w-6 h-6 text-emerald-400" />
+              <CheckCircle className="w-5 h-5 text-metallic-gold" />
               <span>{currentLang.consent_agree}</span>
             </button>
             <button
               onClick={() => handleConsent(false)}
-              className="touch-target bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-2xl p-4 font-semibold text-lg flex items-center justify-center gap-2"
+              className="touch-target bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-800 hover:border-rose-300 border border-border-strong rounded-2xl p-4 font-semibold text-sm md:text-base flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs"
             >
-              <XCircle className="w-6 h-6 text-slate-400" />
+              <XCircle className="w-5 h-5 text-slate-400" />
               <span>{currentLang.consent_decline}</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 2B: RECEPTION GUIDANCE (WHEN CONSENT IS DECLINED) */}
+      {step === 'consent_declined' && (
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 md:p-8 border-2 border-amber-400 shadow-2xl my-auto max-w-2xl mx-auto w-full text-center animate-in fade-in duration-200">
+          <div className="w-16 h-16 bg-amber-100 text-amber-800 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+            <HelpCircle className="w-9 h-9 text-amber-700" />
+          </div>
+
+          <span className="inline-flex rounded-full border border-amber-300 bg-amber-50 px-3.5 py-1 text-[11px] font-black uppercase tracking-wider text-amber-900 mb-3">
+            Offline Hospital Reception Guidance
+          </span>
+
+          <h2 className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-extrabold text-ink-black mb-2">
+            {currentLang.reception_title || 'Consent Not Provided • Please Visit Hospital Reception'}
+          </h2>
+
+          <p className="text-sm md:text-base text-ink-black/80 font-medium mb-6 leading-relaxed max-w-xl mx-auto">
+            {currentLang.reception_body || 'Since digital intake consent was declined, automated kiosk intake cannot proceed. Our hospital reception team will gladly assist you with physical paper forms and manual doctor queue assignment.'}
+          </p>
+
+          {/* Guidance Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-6">
+            <div className="bg-cornsilk/60 p-4 rounded-2xl border border-border-strong">
+              <span className="text-[10px] font-black text-pine-teal uppercase tracking-wider block mb-1">
+                Reception Desk Location
+              </span>
+              <p className="font-extrabold text-ink-black text-sm">
+                {currentLang.reception_counter || 'Ground Floor • Main Reception Counters 1–4'}
+              </p>
+              <p className="text-xs text-ink-black/70 mt-1">
+                Located directly opposite the main hospital entrance gate.
+              </p>
+            </div>
+
+            <div className="bg-cornsilk/60 p-4 rounded-2xl border border-border-strong">
+              <span className="text-[10px] font-black text-pine-teal uppercase tracking-wider block mb-1">
+                What to Present
+              </span>
+              <p className="font-extrabold text-ink-black text-sm">
+                Physical ID or Paper Registration Slip
+              </p>
+              <p className="text-xs text-ink-black/70 mt-1">
+                The receptionist will assign your doctor without electronic recording.
+              </p>
+            </div>
+          </div>
+
+          {/* Audio Replay Button */}
+          <div className="mb-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => speakPrompt(currentLang.reception_prompt || 'Digital consent was not provided. Please visit the central hospital reception desk on the ground floor for manual registration and offline assistance.')}
+              className="px-5 py-2.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <Volume2 className="w-4 h-4 text-amber-700" />
+              <span>मार्गदर्शन पुनः सुनें / Replay Audio Guidance</span>
+            </button>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-4 border-t border-border">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('consent');
+                speakPrompt(currentLang.consent_prompt);
+              }}
+              className="touch-target bg-pine-teal hover:brightness-110 text-cornsilk rounded-2xl p-4 font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all active:scale-[0.98]"
+            >
+              <CheckCircle className="w-5 h-5 text-metallic-gold" />
+              <span>{currentLang.reception_return_consent || 'I Changed My Mind — Give Consent'}</span>
+            </button>
+
+            <Link
+              href="/"
+              className="touch-target bg-metallic-gold hover:brightness-105 active:scale-[0.98] text-ink-black rounded-2xl p-4 font-extrabold text-sm flex items-center justify-center gap-2 shadow-md transition-all"
+            >
+              <span>{currentLang.home_btn || 'Return to Home'}</span>
+            </Link>
           </div>
         </div>
       )}
@@ -1570,26 +1728,38 @@ export default function KioskPortal() {
               </div>
             </div>
 
-            {/* 4. Queue Token & ABHA (Optional) */}
+            {/* 4. Queue Token & Optional ABHA (ABID) */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-3">
                 <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62]">
                   {currentLang.queue_id_label}
                 </label>
-                <span className="text-xs bg-[#EAF3F2] text-[#2F5D62] px-2.5 py-0.5 rounded-full font-bold">
+                <span className="text-xs bg-[#EAF3F2] text-[#2F5D62] px-3 py-1 rounded-full font-extrabold border border-teal-200">
                   {queueId}
                 </span>
               </div>
-              <input
-                type="text"
-                placeholder={currentLang.abha_id_label || 'ABHA ID: 91-1234-5678-9012 (Optional)'}
-                value={abhaId}
-                onChange={e => setAbhaId(e.target.value)}
-                className="w-full p-3 border-2 border-slate-200 focus:border-[#2F5D62] bg-white rounded-xl text-xs font-semibold text-slate-800 outline-none"
-              />
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                आभा आईडी वैकल्पिक है (ABHA ID is optional)
-              </span>
+              <div className="pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-extrabold uppercase tracking-wider text-[#2F5D62]">
+                    {currentLang.abha_id_label}
+                  </label>
+                  <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                    Optional Field
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. 91-1234-5678-9012 (Fill only if you have an ABID)"
+                  value={abhaId}
+                  onChange={e => setAbhaId(e.target.value)}
+                  className="w-full p-3 border-2 border-slate-200 focus:border-[#2F5D62] bg-white rounded-xl text-xs font-semibold text-slate-800 outline-none transition-all"
+                />
+                <span className="text-[11px] text-slate-500 mt-1.5 block leading-tight">
+                  {language === 'hi'
+                    ? 'आभा आईडी केवल तभी भरें जब आपके पास हो; इसे खाली छोड़ने पर अस्पताल इसे बाद में साझा/लिंक करेगा।'
+                    : 'Fill only if you have an ABID. If left empty, the hospital will link and share it accordingly.'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1725,17 +1895,69 @@ export default function KioskPortal() {
         </div>
       )}
 
-      {/* STEP 5: RED FLAG EMERGENCY ALERT (FULLY LOCALIZED) */}
+      {/* STEP 5: RED FLAG EMERGENCY ALERT (FULLY LOCALIZED WITH LIVE SIREN & ER-1 ROUTING) */}
       {step === 'red_flag' && (
-        <div className="bg-[#C4292A] text-white rounded-3xl p-8 shadow-2xl text-center my-auto animate-pulse">
-          <AlertTriangle className="w-20 h-20 mx-auto mb-6 text-amber-300" />
-          <h2 className="text-3xl font-extrabold mb-4">{currentLang.red_flag_title}</h2>
-          <div className="bg-white/10 p-6 rounded-2xl mb-8 border border-white/20">
-            <p className="text-2xl font-bold leading-relaxed">
-              {currentLang.red_flag_default}
-            </p>
+        <div className="bg-[#C4292A] text-white rounded-3xl p-6 md:p-10 shadow-2xl text-center my-auto border-4 border-amber-300 animate-pulse max-w-2xl mx-auto w-full">
+          <div className="w-20 h-20 bg-white text-rose-700 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-lg">
+            <AlertTriangle className="w-12 h-12 text-rose-600" />
           </div>
-          <p className="text-xs text-white/80">{currentLang.red_flag_footer}: {redFlagTrigger?.rule_id || 'EMERGENCY'}</p>
+
+          <span className="inline-block bg-amber-300 text-slate-950 font-black text-xs px-4 py-1 rounded-full uppercase tracking-widest mb-3">
+            Critical Triage — Emergency Ward Routing
+          </span>
+
+          <h2 className="text-3xl md:text-4xl font-black mb-3 leading-tight">
+            {currentLang.red_flag_title}
+          </h2>
+
+          <div className="bg-white/10 p-6 rounded-2xl mb-6 border border-white/20 text-left space-y-4">
+            <div className="border-b border-white/20 pb-3">
+              <span className="text-amber-200 text-xs font-bold uppercase tracking-wider block">
+                Destination Ward & Room
+              </span>
+              <p className="text-xl md:text-2xl font-black text-white">
+                Emergency Resuscitation Bay (Room ER-1) — Ground Floor
+              </p>
+              <p className="text-xs text-amber-100 font-semibold mt-0.5">
+                Attending Physician: Dr. Priya Nair, MEM (Emergency Lead) • Priority: IMMEDIATE
+              </p>
+            </div>
+
+            <div className="bg-black/20 p-4 rounded-xl border border-white/10">
+              <span className="text-xs text-amber-200 font-bold uppercase tracking-wider block mb-1">
+                Immediate Action Required
+              </span>
+              <p className="text-base md:text-lg font-bold leading-relaxed text-white">
+                {currentLang.red_flag_default}
+              </p>
+              <p className="text-xs text-white/90 mt-2 font-medium">
+                Please proceed directly to Room ER-1. A high-priority emergency siren and notification have already been transmitted to Dr. Priya Nair and the emergency response desk.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                playEmergencySirenAudio();
+                speakPrompt(currentLang.red_flag_default);
+              }}
+              className="px-6 py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-all flex items-center gap-2"
+            >
+              <Volume2 className="w-5 h-5" />
+              <span>Replay Siren Alert</span>
+            </button>
+            <Link
+              href="/"
+              className="px-6 py-3.5 bg-white/20 hover:bg-white/30 text-white font-bold text-sm rounded-xl transition-all"
+            >
+              <span>Return to Home</span>
+            </Link>
+          </div>
+
+          <p className="text-[11px] text-white/70 mt-5">
+            {currentLang.red_flag_footer}: {redFlagTrigger?.rule_id || 'RF_EMERGENCY_CRITICAL'} • ER Staff Alert Dispatched
+          </p>
         </div>
       )}
 
@@ -1793,8 +2015,8 @@ export default function KioskPortal() {
                       <div className="text-slate-600 space-y-1 mb-2">
                         {docHospital && <p className="font-semibold text-slate-800">{docHospital}</p>}
                         <div className="flex flex-wrap gap-2 text-[11px]">
-                          {medCount > 0 && <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md font-semibold">💊 {medCount} Medicine(s)</span>}
-                          {labCount > 0 && <span className="bg-sky-100 text-sky-900 px-2 py-0.5 rounded-md font-semibold">🧪 {labCount} Lab Value(s)</span>}
+                          {medCount > 0 && <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md font-semibold">{medCount} Medicine(s)</span>}
+                          {labCount > 0 && <span className="bg-sky-100 text-sky-900 px-2 py-0.5 rounded-md font-semibold">{labCount} Lab Value(s)</span>}
                         </div>
                       </div>
 
@@ -1819,30 +2041,136 @@ export default function KioskPortal() {
         </div>
       )}
 
-      {/* STEP 7: CONFIRMATION (FULLY LOCALIZED) */}
-      {step === 'confirm' && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center my-auto">
-          <div className="w-20 h-20 bg-emerald-100 text-[#2E7D4F] rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-            <CheckCircle className="w-12 h-12" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-[#1A1A1A] mb-3">{currentLang.confirm_title}</h2>
-          <p className="text-slate-600 text-base max-w-md mx-auto mb-8">
-            {currentLang.confirm_desc}
-          </p>
+      {/* STEP 7: CONFIRMATION & DIGITAL OPD CONSULTATION SLIP (FULLY LOCALIZED) */}
+      {step === 'confirm' && (() => {
+        const allocatedDoc = allocateDoctorAndRoom({
+          age: patientAge,
+          clinical_mode: clinicalMode,
+          is_red_flag: false,
+          symptoms_text: answeredHistory.map((a: any) => a.answer || '').join(' ') || ''
+        });
+        const waitTime = getEstimatedQueueTime(1, allocatedDoc);
 
-          <Link
-            href="/"
-            className="touch-target inline-flex items-center gap-2 bg-[#2F5D62] text-white px-8 py-4 rounded-2xl font-bold text-lg shadow-md hover:bg-teal-800"
-          >
-            <span>{currentLang.home_btn}</span>
-          </Link>
-        </div>
-      )}
+        return (
+          <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm text-center my-auto max-w-2xl mx-auto w-full">
+            <div className="w-16 h-16 bg-emerald-100 text-[#2E7D4F] rounded-full flex items-center justify-center mx-auto mb-4 shadow-xs">
+              <CheckCircle className="w-10 h-10" />
+            </div>
+
+            <h2 className="text-2xl md:text-3xl font-extrabold text-[#1A1A1A] mb-1">
+              {currentLang.confirm_title}
+            </h2>
+            <p className="text-slate-600 text-xs md:text-sm mb-6 max-w-lg mx-auto">
+              {currentLang.confirm_desc}
+            </p>
+
+            {/* OFFICIAL DIGITAL OPD CONSULTATION SLIP */}
+            <div className="bg-gradient-to-b from-[#FAF4D3]/40 to-slate-50 border-2 border-[#2F5D62]/30 rounded-3xl p-5 md:p-6 mb-6 text-left shadow-md relative overflow-hidden">
+              {/* Top Slip Header */}
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 mb-4 gap-2">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#2F5D62] bg-[#EAF3F2] px-2.5 py-0.5 rounded-full">
+                    Hospital OPD Smart Token
+                  </span>
+                  <h3 className="text-base font-extrabold text-slate-900 mt-1">
+                    Official Consultation Token Pass
+                  </h3>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl md:text-3xl font-black text-[#2F5D62] tracking-wider block">
+                    {queueId}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    ● Live Queue Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Slip Details Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-slate-400 text-[10px] font-bold block uppercase">Patient Name</span>
+                  <span className="font-extrabold text-slate-900 text-sm truncate block">{patientName.trim() || 'PATIENT_GUEST'}</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-slate-400 text-[10px] font-bold block uppercase">Age / Gender</span>
+                  <span className="font-bold text-slate-800">{patientAge || '35'} Yrs / {patientGender}</span>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-slate-400 text-[10px] font-bold block uppercase">ABHA ID (Optional)</span>
+                  <span className="font-mono text-slate-700 text-[11px] font-bold truncate block">
+                    {abhaId ? abhaId : 'Hospital to Link'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Assigned Room & Doctor Highlight Card */}
+              <div className="bg-[#2F5D62] text-white p-4 rounded-2xl shadow-sm mb-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-emerald-200 text-[10px] font-black uppercase tracking-wider block">
+                      Allocated Consultation Room
+                    </span>
+                    <p className="text-lg md:text-xl font-black">
+                      {allocatedDoc.room_display}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-emerald-200 text-[10px] font-black uppercase tracking-wider block">
+                      Estimated Queue Time
+                    </span>
+                    <span className="bg-white/20 text-white font-extrabold text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" /> {waitTime.timeString}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/20 flex flex-wrap items-center justify-between text-xs text-teal-100 gap-1">
+                  <span><strong>Doctor:</strong> {allocatedDoc.name} ({allocatedDoc.qualification})</span>
+                  <span className="text-[11px] opacity-90 font-medium">{allocatedDoc.floor}</span>
+                </div>
+              </div>
+
+              {/* Waiting Guidance Note */}
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs p-3 rounded-xl flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">आपकी स्वास्थ्य जानकारी डॉक्टर के कंप्यूटर पर स्थानांतरित कर दी गई है।</p>
+                  <p className="text-[11px] text-emerald-800 mt-0.5">
+                    कृपया टोकन संख्या <strong>{queueId}</strong> याद रखें और <strong>{allocatedDoc.room_number}</strong> के बाहर अपनी बारी की प्रतीक्षा करें।
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => {
+                  playHospitalChime();
+                  speakPrompt(`टोकन संख्या ${queueId}। कृपया ${allocatedDoc.room_number} के बाहर प्रतीक्षा करें।`);
+                }}
+                className="touch-target bg-slate-100 hover:bg-slate-200 text-[#2F5D62] border border-slate-200 px-5 py-3 rounded-2xl font-bold text-sm flex items-center gap-2 transition-all"
+              >
+                <Volume2 className="w-4 h-4" />
+                <span>Replay Room Announcement</span>
+              </button>
+              <Link
+                href="/"
+                className="touch-target inline-flex items-center gap-2 bg-metallic-gold hover:brightness-105 active:scale-[0.98] text-ink-black px-8 py-3 rounded-2xl font-extrabold text-sm shadow-md transition-all"
+              >
+                <span>{currentLang.home_btn}</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Footer */}
-      <footer className="text-center text-xs text-slate-400 py-2">
+      <footer className="text-center text-xs text-ink-black/60 py-2 font-medium">
         {currentLang.app_title} • 10 Major Indian Languages • DPDP Compliant
       </footer>
+      </main>
     </div>
   );
 }

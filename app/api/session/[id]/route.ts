@@ -11,17 +11,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const res = await query(
       `UPDATE sessions
        SET queue_id = COALESCE($1, queue_id),
-           abha_mock_id = COALESCE($2, abha_mock_id),
+           abha_mock_id = $2,
            patient_name = COALESCE($3, patient_name),
            age = COALESCE($4, age),
            gender = COALESCE($5, gender)
        WHERE id = $6
        RETURNING *`,
-      [queue_id || null, abha_mock_id || null, patient_name || null, age ? parseInt(String(age), 10) : null, gender || null, sessionId]
+      [queue_id || null, abha_mock_id ? String(abha_mock_id).trim() : null, patient_name || null, age ? parseInt(String(age), 10) : null, gender || null, sessionId]
     );
 
     if (res.rows.length === 0) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    // Persist optional ABHA ID to structured_history if provided
+    if (abha_mock_id && String(abha_mock_id).trim()) {
+      await query(
+        `INSERT INTO structured_history (session_id, section, field_name, value, confidence)
+         VALUES ($1, 'demographics', 'abha_id', $2, 1.0)`,
+        [sessionId, String(abha_mock_id).trim()]
+      ).catch(() => {});
     }
 
     // Also persist demographics into structured_history

@@ -97,3 +97,36 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const resolvedParams = await Promise.resolve(params);
+    const sessionId = resolvedParams.id;
+
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
+    }
+
+    // Delete in safe child-to-parent order to respect foreign key constraints
+    await query(`DELETE FROM red_flag_events WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM contradictions WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM review_actions WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM attested_records WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM draft_summaries WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM extracted_entities WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM document_uploads WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM raw_answers WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM structured_history WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM consent_records WHERE session_id = $1`, [sessionId]);
+    await query(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
+
+    return NextResponse.json({
+      success: true,
+      message: `Patient assessment completed. Session ${sessionId} discharged and removed from active queue.`
+    });
+  } catch (err: any) {
+    console.error('Error deleting/discharging patient session:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+

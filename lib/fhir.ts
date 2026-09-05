@@ -23,19 +23,26 @@ export function buildSyntheticFHIRBundle(attestedRecord: any, sessionInfo: any) 
   const entries: any[] = [];
 
   // 1. Patient Resource
+  const patientIdentifiers: any[] = [];
+  if (sessionInfo?.abha_mock_id && String(sessionInfo.abha_mock_id).trim() !== '') {
+    patientIdentifiers.push({
+      system: 'https://healthid.ndhm.gov.in',
+      value: String(sessionInfo.abha_mock_id).trim()
+    });
+  }
+  patientIdentifiers.push({
+    system: 'https://medikiosk.local/queue-id',
+    value: sessionInfo?.queue_id || 'Q-TEMP'
+  });
+
   entries.push({
     fullUrl: `urn:uuid:patient-1`,
     resource: {
       resourceType: 'Patient',
       id: 'patient-1',
-      identifier: [
-        {
-          system: 'https://healthid.ndhm.gov.in',
-          value: sessionInfo?.abha_mock_id || '91-1234-5678-9012'
-        }
-      ],
+      identifier: patientIdentifiers,
       name: [{ text: sessionInfo?.patient_name || 'Anonymous Patient' }],
-      gender: 'other',
+      gender: sessionInfo?.gender ? String(sessionInfo.gender).toLowerCase() : 'other',
     }
   });
 
@@ -252,7 +259,7 @@ PATIENT DEMOGRAPHIC & ENCOUNTER DETAILS
 --------------------------------------------------------------------------------
 Patient Name   : ${sessionInfo?.patient_name || sessionInfo?.patient_ref || 'Anonymous Patient'}
 Queue Token    : ${sessionInfo?.queue_id || 'Q-N/A'}
-ABHA ID        : ${sessionInfo?.abha_mock_id || '91-1234-5678-9012 (Mock)'}
+ABHA ID        : ${sessionInfo?.abha_mock_id ? sessionInfo.abha_mock_id : 'Not Provided (Hospital to Link)'}
 Age / Gender   : ${sessionInfo?.age || 'N/A'} Yrs / ${sessionInfo?.gender || 'Unspecified'}
 Language       : ${(sessionInfo?.language || 'en').toUpperCase()}
 Clinical Mode  : ${isAyurveda ? 'Ministry of AYUSH (Ayurvedic Intake / Dashavidha Pariksha)' : 'Standard Allopathy'}
